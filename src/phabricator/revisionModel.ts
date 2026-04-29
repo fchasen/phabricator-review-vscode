@@ -245,6 +245,38 @@ export class RevisionModel {
 		return created;
 	}
 
+	/**
+	 * Replace the revision's project tags with the given set. Re-fetches the
+	 * revision afterwards so attachments.projects reflects the new state.
+	 */
+	public async setProjects(projectPHIDs: string[]): Promise<void> {
+		await this._client.editRevision({
+			objectIdentifier: this._revision.phid,
+			transactions: [{ type: 'projects.set', value: projectPHIDs }],
+		});
+		await this.refresh();
+	}
+
+	/**
+	 * Re-fetch this revision from Conduit and replace local state.
+	 */
+	public async refresh(): Promise<void> {
+		const fresh = await this._client.getRevision(this._revision.phid, {
+			reviewers: true,
+			subscribers: true,
+			projects: true,
+		});
+		if (fresh) {
+			// Forces onDidChange to fire even if dateModified hasn't ticked.
+			this._transactions = undefined;
+			this._revision = fresh;
+			this._activeDiffPHID = fresh.fields.diffPHID;
+			this._activeDiff = undefined;
+			this._changesetsCache.clear();
+			this._onDidChange.fire();
+		}
+	}
+
 	private async _lookupDiffId(diffPHID: string): Promise<number> {
 		const iter = this._client.searchDiffs({ phids: [diffPHID] });
 		const result = await iter.next();

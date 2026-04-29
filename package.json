@@ -88,6 +88,11 @@
 				"command": "phabricator.updateRevisionFromCommit",
 				"title": "Update Revision from Commit",
 				"category": "Phabricator"
+			},
+			{
+				"command": "phabricator.editProjects",
+				"title": "Edit Project Tags",
+				"category": "Phabricator"
 			}
 		],
 		"menus": {

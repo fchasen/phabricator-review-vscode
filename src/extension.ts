@@ -85,6 +85,9 @@ export async function activate(context: vscode.ExtensionContext) {
 			'phabricator.revealInlineComment',
 			(args: RevealInlineArgs) => revealInlineComment(args),
 		),
+		vscode.commands.registerCommand('phabricator.editProjects', (revisionPHID: string) =>
+			editProjectsFlow(revisionsManager, revisionPHID),
+		),
 	);
 
 	const restored = await credentials.restore();
@@ -102,6 +105,84 @@ interface RevealInlineArgs {
 	length?: number;
 	isNewFile: boolean;
 	status?: 'added' | 'removed' | 'modified' | 'renamed' | 'copied';
+}
+
+async function editProjectsFlow(manager: import('./phabricator/revisionsManager').RevisionsManager, revisionPHID: string): Promise<void> {
+	const session = manager.session;
+	if (!session) {
+		vscode.window.showErrorMessage('Sign in to edit project tags.');
+		return;
+	}
+	const model = await manager.getOrFetchRevision(revisionPHID);
+	if (!model) {
+		vscode.window.showErrorMessage('Revision not found.');
+		return;
+	}
+	const current = model.revision.attachments.projects?.projectPHIDs || [];
+	const resolver = manager.userResolver;
+	if (resolver && current.length > 0) {
+		await resolver.resolveMany(current);
+	}
+	const currentSlugs = current.map((p) => resolver?.displayName(p) || p);
+	const input = await vscode.window.showInputBox({
+		prompt: 'Project tags (comma-separated slugs, with or without #)',
+		placeHolder: 'firefox-build-system, backup-reviewers-rotation',
+		value: currentSlugs.join(', '),
+		ignoreFocusOut: true,
+	});
+	if (input === undefined) {
+		return;
+	}
+	const tokens = input
+		.split(',')
+		.map((t) => t.trim().replace(/^#/, ''))
+		.filter((t) => t.length > 0);
+
+	let resolvedPHIDs: string[] = [];
+	if (tokens.length > 0) {
+		try {
+			const result = await session.client.call<{ data: Array<{ phid: string; fields: { slug: string | null; name: string } }> }>(
+				'project.search',
+				{ constraints: { slugs: tokens } },
+			);
+			const found = new Map<string, string>();
+			for (const project of result.data) {
+				if (project.fields.slug) {
+					found.set(project.fields.slug, project.phid);
+				}
+			}
+			const unknown: string[] = [];
+			for (const slug of tokens) {
+				const phid = found.get(slug);
+				if (phid) {
+					resolvedPHIDs.push(phid);
+				} else {
+					unknown.push(slug);
+				}
+			}
+			if (unknown.length > 0) {
+				const proceed = await vscode.window.showWarningMessage(
+					`Unknown project slug(s): ${unknown.join(', ')}. Continue and ignore them?`,
+					{ modal: true },
+					'Continue',
+					'Cancel',
+				);
+				if (proceed !== 'Continue') {
+					return;
+				}
+			}
+		} catch (err) {
+			vscode.window.showErrorMessage(`project.search failed: ${err instanceof Error ? err.message : err}`);
+			return;
+		}
+	}
+
+	try {
+		await model.setProjects(resolvedPHIDs);
+		vscode.window.showInformationMessage(`Updated project tags on ${model.monogram}.`);
+	} catch (err) {
+		vscode.window.showErrorMessage(`Failed to update projects: ${err instanceof Error ? err.message : err}`);
+	}
 }
 
 async function revealInlineComment(args: RevealInlineArgs): Promise<void> {

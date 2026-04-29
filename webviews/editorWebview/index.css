@@ -126,9 +126,21 @@ body {
 	border-radius: 0;
 }
 
-/* Actions */
-.actions textarea {
-	width: 100%; min-height: 80px; padding: 8px;
+/* Section header layout */
+.section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.section-head h2, .section-head h3 { margin: 0; }
+
+/* Comments-only toggle */
+.toggle {
+	display: inline-flex; align-items: center; gap: 6px;
+	font-size: 0.85em; opacity: 0.85;
+	cursor: pointer; user-select: none;
+}
+.toggle input { accent-color: var(--vscode-focusBorder); }
+
+/* Composer */
+.composer textarea {
+	width: 100%; min-height: 100px; padding: 8px;
 	background: var(--vscode-input-background);
 	color: var(--vscode-input-foreground);
 	border: 1px solid var(--vscode-input-border, transparent);
@@ -136,18 +148,62 @@ body {
 	font-family: inherit; font-size: inherit;
 	resize: vertical;
 }
-.actions textarea:focus { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
-.actions .buttons { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-.actions button {
-	padding: 6px 14px;
+.composer textarea:focus { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
+
+/* Sidebar review action stack */
+.actions { display: flex; flex-direction: column; gap: 6px; }
+.action {
+	display: flex; align-items: center; gap: 8px;
+	padding: 8px 12px;
+	border-radius: 4px;
+	cursor: pointer; font: inherit;
+	border: 1px solid transparent;
+	background: var(--vscode-button-secondaryBackground);
+	color: var(--vscode-button-secondaryForeground);
+	text-align: left;
+	transition: background 0.1s ease;
+}
+.action-icon {
+	width: 18px; height: 18px;
+	display: inline-flex; align-items: center; justify-content: center;
+	border-radius: 50%;
+	font-size: 0.85em; font-weight: 600;
+	background: rgba(255, 255, 255, 0.12);
+}
+.action-primary {
 	background: var(--vscode-button-background);
 	color: var(--vscode-button-foreground);
-	border: 1px solid var(--vscode-button-border, transparent);
-	border-radius: 3px;
-	cursor: pointer; font: inherit;
 }
-.actions button:disabled { opacity: 0.5; cursor: not-allowed; }
-.actions button:hover:not(:disabled) { background: var(--vscode-button-hoverBackground); }
+.action-accept .action-icon { background: var(--vscode-charts-green); color: var(--vscode-editor-background); }
+.action-warn { background: color-mix(in srgb, var(--vscode-errorForeground) 18%, transparent); color: var(--vscode-foreground); border-color: color-mix(in srgb, var(--vscode-errorForeground) 35%, transparent); }
+.action-warn .action-icon { background: var(--vscode-errorForeground); color: var(--vscode-editor-background); }
+.action-secondary { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
+.action:hover:not(:disabled) { background: var(--vscode-button-hoverBackground); }
+.action-warn:hover:not(:disabled) { background: color-mix(in srgb, var(--vscode-errorForeground) 28%, transparent); }
+.action:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Inline link buttons / project edit */
+.link-button {
+	background: transparent;
+	border: none;
+	color: var(--vscode-textLink-foreground);
+	cursor: pointer;
+	font: inherit; font-size: 0.85em;
+	padding: 0;
+}
+.link-button:hover { color: var(--vscode-textLink-activeForeground); text-decoration: underline; }
+
+/* Project tags */
+.tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.tag {
+	font-family: var(--vscode-editor-font-family);
+	font-size: 0.85em;
+	padding: 2px 8px;
+	background: var(--vscode-textBlockQuote-background);
+	border: 1px solid var(--vscode-input-border, transparent);
+	border-radius: 999px;
+	color: var(--vscode-textLink-foreground);
+}
 
 /* Markdown body */
 .comment-body { line-height: 1.5; }

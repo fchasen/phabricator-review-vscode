@@ -28,6 +28,7 @@ interface OverviewPayload {
 		isBlocking: boolean;
 	}>;
 	subscribers: string[];
+	projects: Array<{ phid: string; displayName: string }>;
 	files: Array<{
 		path: string;
 		status: string;
@@ -148,6 +149,14 @@ export class RevisionOverviewPanel extends WebviewBase {
 				});
 				return this._replyMessage(message, true);
 			}
+			case 'editProjects': {
+				try {
+					await vscode.commands.executeCommand('phabricator.editProjects', this._model.phid);
+					return this._replyMessage(message, true);
+				} catch (err) {
+					return this._throwError(message, err instanceof Error ? err.message : String(err));
+				}
+			}
 			default:
 				return this.MESSAGE_UNHANDLED;
 		}
@@ -179,6 +188,8 @@ export class RevisionOverviewPanel extends WebviewBase {
 		const reviewerEntries = revision.attachments.reviewers?.reviewers || [];
 		reviewerEntries.forEach((r) => phidsToResolve.add(r.reviewerPHID));
 		(revision.attachments.subscribers?.subscriberPHIDs || []).forEach((p) => phidsToResolve.add(p));
+		const projectPHIDs = revision.attachments.projects?.projectPHIDs || [];
+		projectPHIDs.forEach((p) => phidsToResolve.add(p));
 		transactions.forEach((t: Transaction) => phidsToResolve.add(t.authorPHID));
 		if (resolver) {
 			await resolver.resolveMany(Array.from(phidsToResolve));
@@ -206,6 +217,10 @@ export class RevisionOverviewPanel extends WebviewBase {
 				isBlocking: r.isBlocking,
 			})),
 			subscribers: revision.attachments.subscribers?.subscriberPHIDs || [],
+			projects: projectPHIDs.map((phid) => ({
+				phid,
+				displayName: resolver?.displayName(phid) || phid,
+			})),
 			files: changesets.map((cs) => ({
 				path: cs.currentPath || cs.oldPath || '',
 				status: changesetStatus(cs.type),
