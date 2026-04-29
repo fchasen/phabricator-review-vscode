@@ -5,7 +5,7 @@ import Logger from './common/logger';
 import { RevisionsManager } from './phabricator/revisionsManager';
 import { RevisionsTreeDataProvider } from './view/revisionsTreeDataProvider';
 import { InMemRevisionFileSystemProvider } from './view/inMemRevisionContentProvider';
-import { PHAB_SCHEME } from './common/uri';
+import { PHAB_SCHEME, toPhabUri } from './common/uri';
 import { RevisionOverviewPanel } from './phabricator/revisionOverview';
 import { RevisionCommentController } from './view/revisionCommentController';
 import { runSubmitCommitFlow } from './view/createRevisionFlow';
@@ -81,11 +81,59 @@ export async function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('phabricator.updateRevisionFromCommit', () =>
 			runSubmitCommitFlow(revisionsManager, context.extensionUri, 'update'),
 		),
+		vscode.commands.registerCommand(
+			'phabricator.revealInlineComment',
+			(args: RevealInlineArgs) => revealInlineComment(args),
+		),
 	);
 
 	const restored = await credentials.restore();
 	if (restored) {
 		updateContext(true);
+	}
+}
+
+interface RevealInlineArgs {
+	revisionId: number;
+	revisionPHID: string;
+	diffPHID: string;
+	path: string;
+	line: number;
+	length?: number;
+	isNewFile: boolean;
+	status?: 'added' | 'removed' | 'modified' | 'renamed' | 'copied';
+}
+
+async function revealInlineComment(args: RevealInlineArgs): Promise<void> {
+	const side: 'before' | 'after' = args.isNewFile ? 'after' : 'before';
+	const status = args.status || 'modified';
+	const beforeUri = toPhabUri({
+		revisionId: args.revisionId,
+		revisionPHID: args.revisionPHID,
+		diffPHID: args.diffPHID,
+		fileName: args.path,
+		side: 'before',
+		status,
+	});
+	const afterUri = toPhabUri({
+		revisionId: args.revisionId,
+		revisionPHID: args.revisionPHID,
+		diffPHID: args.diffPHID,
+		fileName: args.path,
+		side: 'after',
+		status,
+	});
+	const startLine = Math.max(0, args.line - 1);
+	const endLine = Math.max(startLine, startLine + (args.length || 0));
+	const range = new vscode.Range(startLine, 0, endLine, 0);
+	const targetUri = side === 'after' ? afterUri : beforeUri;
+	await vscode.commands.executeCommand('vscode.diff', beforeUri, afterUri, `D${args.revisionId} — ${args.path}`, {
+		selection: range,
+	} satisfies vscode.TextDocumentShowOptions);
+	const editor = vscode.window.visibleTextEditors.find((e) => e.document.uri.toString() === targetUri.toString());
+	if (editor) {
+		editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
+		editor.selection = new vscode.Selection(range.start, range.end);
 	}
 }
 

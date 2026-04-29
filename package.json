@@ -147,11 +147,13 @@
 		"test": "npm run test:client"
 	},
 	"dependencies": {
+		"markdown-it": "^14.1.1",
 		"phabricator-client": "file:./phabricator-client",
 		"react": "^18.3.1",
 		"react-dom": "^18.3.1"
 	},
 	"devDependencies": {
+		"@types/markdown-it": "^14.1.2",
 		"@types/node": "^20.12.0",
 		"@types/react": "^18.3.0",
 		"@types/react-dom": "^18.3.0",

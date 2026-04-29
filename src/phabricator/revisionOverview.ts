@@ -40,7 +40,17 @@ interface OverviewPayload {
 		dateCreated: number;
 		fields: object;
 		comments: Array<{ phid: string; content: string; dateCreated: number }>;
+		inline?: InlineLink;
 	}>;
+}
+
+interface InlineLink {
+	diffPHID: string;
+	path: string;
+	line: number;
+	length: number;
+	isNewFile: boolean;
+	status: 'added' | 'removed' | 'modified' | 'renamed' | 'copied';
 }
 
 /**
@@ -126,6 +136,18 @@ export class RevisionOverviewPanel extends WebviewBase {
 				} catch (err) {
 					return this._throwError(message, err instanceof Error ? err.message : String(err));
 				}
+			case 'revealInlineComment': {
+				const inline = message.args as InlineLink | undefined;
+				if (!inline) {
+					return this._replyMessage(message, false);
+				}
+				await vscode.commands.executeCommand('phabricator.revealInlineComment', {
+					revisionId: this._model.id,
+					revisionPHID: this._model.phid,
+					...inline,
+				});
+				return this._replyMessage(message, true);
+			}
 			default:
 				return this.MESSAGE_UNHANDLED;
 		}
@@ -144,6 +166,12 @@ export class RevisionOverviewPanel extends WebviewBase {
 		const revision = this._model.revision;
 		const transactions = await this._model.getTransactions();
 		const changesets = await this._model.getChangesets().catch(() => []);
+		const statusByPath = new Map<string, ReturnType<typeof changesetStatus>>();
+		for (const cs of changesets) {
+			const status = changesetStatus(cs.type);
+			if (cs.currentPath) statusByPath.set(cs.currentPath, status);
+			if (cs.oldPath) statusByPath.set(cs.oldPath, status);
+		}
 		const resolver = this._manager.userResolver;
 
 		const phidsToResolve = new Set<string>();
@@ -192,6 +220,7 @@ export class RevisionOverviewPanel extends WebviewBase {
 				comments: (t.comments || [])
 					.filter((c) => !c.removed)
 					.map((c) => ({ phid: c.phid, content: c.content.raw, dateCreated: c.dateCreated })),
+				inline: extractInlineLink(t, statusByPath),
 			})),
 		};
 	}
@@ -216,6 +245,35 @@ export class RevisionOverviewPanel extends WebviewBase {
 </body>
 </html>`;
 	}
+}
+
+function extractInlineLink(
+	t: Transaction,
+	statusByPath: Map<string, ReturnType<typeof changesetStatus>>,
+): InlineLink | undefined {
+	if (t.type !== 'inline' && t.type !== 'differential.inline' && t.type !== 'differential:inline') {
+		return undefined;
+	}
+	const fields = t.fields as Record<string, unknown> & {
+		diff?: { phid?: string };
+		diffPHID?: string;
+		path?: string;
+		isNewFile?: boolean;
+		line?: number;
+		length?: number;
+	};
+	const diffPHID = fields.diffPHID || fields.diff?.phid;
+	if (!fields.path || !diffPHID || fields.line === undefined) {
+		return undefined;
+	}
+	return {
+		diffPHID,
+		path: fields.path,
+		line: fields.line,
+		length: fields.length || 0,
+		isNewFile: !!fields.isNewFile,
+		status: statusByPath.get(fields.path) || 'modified',
+	};
 }
 
 function makeNonce(): string {

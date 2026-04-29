@@ -14,6 +14,17 @@ const TYPE_LABEL: Record<number, string> = {
 	8: 'C', // multicopy
 };
 
+const TYPE_ICON: Record<number, vscode.ThemeIcon> = {
+	1: new vscode.ThemeIcon('diff-added', new vscode.ThemeColor('gitDecoration.addedResourceForeground')),
+	2: new vscode.ThemeIcon('diff-modified', new vscode.ThemeColor('gitDecoration.modifiedResourceForeground')),
+	3: new vscode.ThemeIcon('diff-removed', new vscode.ThemeColor('gitDecoration.deletedResourceForeground')),
+	4: new vscode.ThemeIcon('diff-renamed', new vscode.ThemeColor('gitDecoration.renamedResourceForeground')),
+	5: new vscode.ThemeIcon('diff-renamed'),
+	6: new vscode.ThemeIcon('diff-renamed', new vscode.ThemeColor('gitDecoration.renamedResourceForeground')),
+	7: new vscode.ThemeIcon('diff-renamed'),
+	8: new vscode.ThemeIcon('diff-renamed'),
+};
+
 const TYPE_TO_STATUS: Record<number, PhabUriParams['status']> = {
 	1: 'added',
 	2: 'modified',
@@ -37,6 +48,7 @@ export class FileChangeNode extends vscode.TreeItem {
 		this.id = `${model.phid}:${changeset.currentPath || changeset.oldPath}`;
 		this.description = TYPE_LABEL[changeset.type] || '?';
 		this.tooltip = `${TYPE_LABEL[changeset.type] || '?'} ${changeset.currentPath || changeset.oldPath}`;
+		this.iconPath = TYPE_ICON[changeset.type] || new vscode.ThemeIcon('file');
 		const status = changesetStatus(changeset.type);
 		this.command = {
 			command: 'vscode.diff',

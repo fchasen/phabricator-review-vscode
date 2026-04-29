@@ -12,6 +12,28 @@ const STATUS_BADGE: Record<string, string> = {
 	'draft': 'Draft',
 };
 
+interface IconSpec {
+	codicon: string;
+	color?: string;
+}
+
+const STATUS_ICON: Record<string, IconSpec> = {
+	'needs-review': { codicon: 'git-pull-request', color: 'charts.blue' },
+	'needs-revision': { codicon: 'git-pull-request', color: 'charts.red' },
+	'changes-planned': { codicon: 'edit', color: 'charts.yellow' },
+	'accepted': { codicon: 'pass-filled', color: 'charts.green' },
+	'published': { codicon: 'git-merge', color: 'charts.purple' },
+	'abandoned': { codicon: 'circle-slash', color: 'descriptionForeground' },
+	'draft': { codicon: 'git-pull-request-draft', color: 'descriptionForeground' },
+};
+
+function iconForStatus(status: string): vscode.ThemeIcon {
+	const spec = STATUS_ICON[status] || { codicon: 'git-pull-request' };
+	return spec.color
+		? new vscode.ThemeIcon(spec.codicon, new vscode.ThemeColor(spec.color))
+		: new vscode.ThemeIcon(spec.codicon);
+}
+
 export class RevisionNode extends vscode.TreeItem {
 	contextValue = 'revision';
 	public readonly browserUri: string;
@@ -21,7 +43,7 @@ export class RevisionNode extends vscode.TreeItem {
 		this.id = `revision:${model.phid}`;
 		this.description = STATUS_BADGE[model.statusValue] || model.statusName;
 		this.tooltip = `${model.monogram} — ${model.title}\n${model.statusName}`;
-		this.iconPath = new vscode.ThemeIcon('git-pull-request');
+		this.iconPath = iconForStatus(model.statusValue);
 		this.browserUri = model.uri;
 		this.command = {
 			command: 'phabricator.openRevision',

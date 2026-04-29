@@ -41,7 +41,10 @@ export class UserResolver {
 		}
 		const project = this._projects.get(phid);
 		if (project) {
-			return `#${project.fields.slug || project.fields.name}`;
+			const raw = project.fields.slug || project.fields.name || '';
+			// Strip a leading '#' if Phabricator already provided it; consumers
+			// (webview, comment labels) decide whether to display the prefix.
+			return raw.startsWith('#') ? raw.slice(1) : raw;
 		}
 		return phid;
 	}
