@@ -1,11 +1,16 @@
 import MarkdownIt from 'markdown-it';
 
-const md: MarkdownIt = MarkdownIt({
-	html: false,
-	linkify: true,
-	breaks: true,
-	typographer: false,
-});
+let md: MarkdownIt | undefined;
+
+function getMarkdown(): MarkdownIt {
+	if (md) {
+		return md;
+	}
+	// `new` works whether MarkdownIt is exported as a class, factory, or
+	// default-export wrapper.
+	md = new MarkdownIt({ html: false, linkify: true, breaks: true });
+	return md;
+}
 
 export interface MarkdownProps {
 	source: string;
@@ -13,7 +18,18 @@ export interface MarkdownProps {
 }
 
 export function Markdown({ source, className }: MarkdownProps) {
-	const html = md.render(source || '');
+	let html = '';
+	try {
+		html = getMarkdown().render(source || '');
+	} catch (err) {
+		console.error('markdown render failed', err);
+		// Fall back to escaped plain text so we never wipe the panel.
+		const escaped = (source || '')
+			.replace(/&/g, '&amp;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;');
+		html = `<pre>${escaped}</pre>`;
+	}
 	return (
 		<div className={`comment-body ${className || ''}`} dangerouslySetInnerHTML={{ __html: html }} />
 	);

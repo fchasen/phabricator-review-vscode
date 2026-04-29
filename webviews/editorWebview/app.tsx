@@ -118,7 +118,7 @@ export function App() {
 						<h2>Timeline</h2>
 						<ul>
 							{payload.timeline.map((tx) => (
-								<li key={tx.id} className={`tx tx-${tx.type.replace(/[.:]/g, '-')}`}>
+								<li key={tx.id} className={`tx tx-${String(tx.type || 'unknown').replace(/[.:]/g, '-')}`}>
 									<header>
 										<strong>{tx.authorName}</strong>
 										<em>{transactionLabel(tx.type)}</em>

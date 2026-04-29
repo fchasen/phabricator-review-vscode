@@ -173,3 +173,16 @@ body {
 }
 .inline-link::before { content: "›"; font-weight: bold; opacity: 0.6; }
 .inline-link:hover { background: var(--vscode-list-hoverBackground); color: var(--vscode-textLink-activeForeground); }
+
+.webview-error {
+	padding: 16px;
+	background: color-mix(in srgb, var(--vscode-errorForeground) 10%, transparent);
+	border: 1px solid var(--vscode-errorForeground);
+	border-radius: 4px;
+	color: var(--vscode-errorForeground);
+	max-width: 800px;
+	margin: 0 auto;
+}
+.webview-error h2 { margin-top: 0; font-size: 1.05em; }
+.webview-error pre { background: var(--vscode-textCodeBlock-background); padding: 8px; border-radius: 4px; overflow-x: auto; font-size: 0.85em; color: var(--vscode-foreground); }
+.webview-error pre.stack { font-size: 0.8em; opacity: 0.8; }

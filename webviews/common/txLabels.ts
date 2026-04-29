@@ -66,7 +66,10 @@ const LABELS: Record<string, string> = {
 	'edit': 'changed edit policy',
 };
 
-export function transactionLabel(type: string): string {
+export function transactionLabel(type: string | null | undefined): string {
+	if (!type) {
+		return 'updated';
+	}
 	if (LABELS[type]) {
 		return LABELS[type];
 	}
