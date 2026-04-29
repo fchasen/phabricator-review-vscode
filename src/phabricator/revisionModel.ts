@@ -205,6 +205,21 @@ export class RevisionModel {
 		this._onDidChange.fire();
 	}
 
+	public async commandeer(message?: string): Promise<void> {
+		await this._client.commandeer(this._revision.phid, message);
+		await this.refresh();
+	}
+
+	public async resign(message?: string): Promise<void> {
+		await this._client.resign(this._revision.phid, message);
+		await this.refresh();
+	}
+
+	public async abandon(message?: string): Promise<void> {
+		await this._client.abandon(this._revision.phid, message);
+		await this.refresh();
+	}
+
 	/**
 	 * Create a draft inline comment. Phabricator stores it as a private draft
 	 * for the authenticated user; it is published as part of the next

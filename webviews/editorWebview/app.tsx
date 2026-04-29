@@ -33,6 +33,8 @@ interface OverviewPayload {
 	statusValue: string;
 	authorName: string;
 	bug: string | null;
+	isAuthor: boolean;
+	isReviewer: boolean;
 	summary: string;
 	testPlan: string;
 	reviewers: Array<{ phid: string; displayName: string; isProject: boolean; status: string; isBlocking: boolean }>;
@@ -86,6 +88,18 @@ export function App() {
 		try {
 			await request(verb, comment);
 			setComment('');
+		} finally {
+			setBusy(false);
+		}
+	};
+
+	const submitDestructive = async (verb: 'commandeer' | 'resign' | 'abandon') => {
+		setBusy(true);
+		try {
+			const ok = await request<boolean>(verb, comment);
+			if (ok) {
+				setComment('');
+			}
 		} finally {
 			setBusy(false);
 		}
@@ -219,6 +233,42 @@ export function App() {
 							<span className="action-icon">💬</span>
 							<span>Comment</span>
 						</button>
+
+						<div className="actions-destructive">
+							{payload.isAuthor && (
+								<button
+									className="action action-destructive"
+									disabled={busy}
+									onClick={() => submitDestructive('abandon')}
+									title="Mark this revision as abandoned (you can reclaim later)"
+								>
+									<span className="action-icon">✕</span>
+									<span>Abandon…</span>
+								</button>
+							)}
+							{!payload.isAuthor && (
+								<button
+									className="action action-destructive"
+									disabled={busy}
+									onClick={() => submitDestructive('commandeer')}
+									title="Take ownership of this revision from its current author"
+								>
+									<span className="action-icon">⇄</span>
+									<span>Commandeer…</span>
+								</button>
+							)}
+							{!payload.isAuthor && payload.isReviewer && (
+								<button
+									className="action action-destructive"
+									disabled={busy}
+									onClick={() => submitDestructive('resign')}
+									title="Remove yourself as a reviewer on this revision"
+								>
+									<span className="action-icon">↩</span>
+									<span>Resign…</span>
+								</button>
+							)}
+						</div>
 					</section>
 
 					<section className="reviewers">

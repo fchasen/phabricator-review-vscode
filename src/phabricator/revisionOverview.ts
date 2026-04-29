@@ -18,6 +18,8 @@ interface OverviewPayload {
 	authorName: string;
 	repositoryPHID: string | null;
 	bug: string | null;
+	isAuthor: boolean;
+	isReviewer: boolean;
 	summary: string;
 	testPlan: string;
 	reviewers: Array<{
@@ -157,8 +159,52 @@ export class RevisionOverviewPanel extends WebviewBase {
 					return this._throwError(message, err instanceof Error ? err.message : String(err));
 				}
 			}
+			case 'commandeer':
+				return this._handleDestructiveAction(
+					message,
+					'Commandeer',
+					`Take ownership of ${this._model.monogram} from its current author? You'll become the author and the existing author will be subscribed.`,
+					(body) => this._model.commandeer(body),
+				);
+			case 'resign':
+				return this._handleDestructiveAction(
+					message,
+					'Resign',
+					`Resign as a reviewer on ${this._model.monogram}? Your name will be removed from the reviewer list.`,
+					(body) => this._model.resign(body),
+				);
+			case 'abandon':
+				return this._handleDestructiveAction(
+					message,
+					'Abandon',
+					`Abandon ${this._model.monogram}? It will be marked Abandoned. You can reclaim it later from the Phabricator web UI.`,
+					(body) => this._model.abandon(body),
+				);
 			default:
 				return this.MESSAGE_UNHANDLED;
+		}
+	}
+
+	private async _handleDestructiveAction(
+		message: IRequestMessage<any>,
+		actionLabel: string,
+		prompt: string,
+		run: (body: string | undefined) => Promise<void>,
+	): Promise<any> {
+		const body = typeof message.args === 'string' ? message.args : undefined;
+		const choice = await vscode.window.showWarningMessage(
+			prompt,
+			{ modal: true, detail: body ? `Comment: ${body}` : undefined },
+			actionLabel,
+		);
+		if (choice !== actionLabel) {
+			return this._replyMessage(message, false);
+		}
+		try {
+			await run(body && body.trim().length > 0 ? body : undefined);
+			return this._replyMessage(message, true);
+		} catch (err) {
+			return this._throwError(message, err instanceof Error ? err.message : String(err));
 		}
 	}
 
@@ -187,6 +233,9 @@ export class RevisionOverviewPanel extends WebviewBase {
 		phidsToResolve.add(revision.fields.authorPHID);
 		const reviewerEntries = revision.attachments.reviewers?.reviewers || [];
 		reviewerEntries.forEach((r) => phidsToResolve.add(r.reviewerPHID));
+		const myPHID = this._manager.session?.userPHID;
+		const isAuthor = !!myPHID && revision.fields.authorPHID === myPHID;
+		const isReviewer = !!myPHID && reviewerEntries.some((r) => r.reviewerPHID === myPHID);
 		(revision.attachments.subscribers?.subscriberPHIDs || []).forEach((p) => phidsToResolve.add(p));
 		const projectPHIDs = revision.attachments.projects?.projectPHIDs || [];
 		projectPHIDs.forEach((p) => phidsToResolve.add(p));
@@ -207,6 +256,8 @@ export class RevisionOverviewPanel extends WebviewBase {
 			authorName: resolver?.displayName(revision.fields.authorPHID) || revision.fields.authorPHID,
 			repositoryPHID: revision.fields.repositoryPHID,
 			bug: revision.fields.bugzilla?.['bug-id'] || null,
+			isAuthor,
+			isReviewer,
 			summary: revision.fields.summary || '',
 			testPlan: revision.fields.testPlan || '',
 			reviewers: reviewerEntries.map((r) => ({

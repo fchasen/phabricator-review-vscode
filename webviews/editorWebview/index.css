@@ -182,6 +182,25 @@ body {
 .action-warn:hover:not(:disabled) { background: color-mix(in srgb, var(--vscode-errorForeground) 28%, transparent); }
 .action:disabled { opacity: 0.45; cursor: not-allowed; }
 
+.actions-destructive {
+	margin-top: 12px;
+	padding-top: 10px;
+	border-top: 1px dashed var(--vscode-panel-border);
+	display: flex; flex-direction: column; gap: 6px;
+}
+.action-destructive {
+	background: transparent;
+	color: var(--vscode-errorForeground);
+	border: 1px solid color-mix(in srgb, var(--vscode-errorForeground) 35%, transparent);
+}
+.action-destructive .action-icon {
+	background: color-mix(in srgb, var(--vscode-errorForeground) 25%, transparent);
+	color: var(--vscode-errorForeground);
+}
+.action-destructive:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--vscode-errorForeground) 12%, transparent);
+}
+
 /* Inline link buttons / project edit */
 .link-button {
 	background: transparent;

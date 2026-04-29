@@ -302,6 +302,51 @@ class PhabricatorClient {
 	}
 
 	/**
+	 * Take over ownership of someone else's revision. Optional comment.
+	 *
+	 * @param {string|number} revIdOrPHID
+	 * @param {string} [body]
+	 * @returns {Promise<EditResult>}
+	 */
+	commandeer(revIdOrPHID, body) {
+		const transactions = /** @type {EditTransaction[]} */ ([{ type: 'commandeer', value: true }]);
+		if (body) {
+			transactions.push({ type: 'comment', value: body });
+		}
+		return this.editRevision({ objectIdentifier: revIdOrPHID, transactions });
+	}
+
+	/**
+	 * Resign as a reviewer on someone else's revision.
+	 *
+	 * @param {string|number} revIdOrPHID
+	 * @param {string} [body]
+	 * @returns {Promise<EditResult>}
+	 */
+	resign(revIdOrPHID, body) {
+		const transactions = /** @type {EditTransaction[]} */ ([{ type: 'resign', value: true }]);
+		if (body) {
+			transactions.push({ type: 'comment', value: body });
+		}
+		return this.editRevision({ objectIdentifier: revIdOrPHID, transactions });
+	}
+
+	/**
+	 * Abandon your own revision. Optional comment.
+	 *
+	 * @param {string|number} revIdOrPHID
+	 * @param {string} [body]
+	 * @returns {Promise<EditResult>}
+	 */
+	abandon(revIdOrPHID, body) {
+		const transactions = /** @type {EditTransaction[]} */ ([{ type: 'abandon', value: true }]);
+		if (body) {
+			transactions.push({ type: 'comment', value: body });
+		}
+		return this.editRevision({ objectIdentifier: revIdOrPHID, transactions });
+	}
+
+	/**
 	 * Create a draft inline comment via the legacy `differential.createinline`
 	 * endpoint. Phabricator stores it as a draft visible only to the author;
 	 * it gets promoted to a published inline the next time the same user
