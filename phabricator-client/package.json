@@ -1,0 +1,26 @@
+{
+  "name": "phabricator-client",
+  "version": "0.0.1",
+  "description": "Mozilla Phabricator Conduit API client (vanilla JS + JSDoc).",
+  "license": "MIT",
+  "main": "index.js",
+  "types": "./dist-types/index.d.ts",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build:types": "tsc -p jsconfig.json",
+    "test": "node --test 'test/*.test.js'",
+    "lint": "eslint src test"
+  },
+  "files": [
+    "index.js",
+    "src",
+    "dist-types",
+    "README.md"
+  ],
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}

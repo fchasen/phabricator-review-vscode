@@ -1,0 +1,22 @@
+{
+	"extends": "./tsconfig.base.json",
+	"compilerOptions": {
+		"outDir": "out",
+		"rootDir": ".",
+		"lib": ["ES2020"],
+		"types": ["node", "vscode"]
+	},
+	"include": [
+		"src/**/*.ts",
+		"phabricator-client/index.js",
+		"phabricator-client/src/**/*.js"
+	],
+	"exclude": [
+		"node_modules",
+		"out",
+		"dist",
+		"webviews",
+		"phabricator-client/test",
+		"phabricator-client/dist-types"
+	]
+}

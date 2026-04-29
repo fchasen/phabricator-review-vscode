@@ -1,0 +1,36 @@
+body {
+	font-family: var(--vscode-font-family);
+	color: var(--vscode-foreground);
+	background: var(--vscode-editor-background);
+	margin: 0;
+	padding: 16px;
+}
+
+.overview { max-width: 960px; margin: 0 auto; }
+.overview header h1 { margin: 0 0 8px; font-size: 1.4em; }
+.overview header h1 a { color: var(--vscode-textLink-foreground); text-decoration: none; }
+.overview .status { display: flex; gap: 12px; align-items: center; font-size: 0.95em; opacity: 0.9; }
+.overview .badge { padding: 2px 8px; border-radius: 999px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); font-size: 0.85em; }
+.overview .badge-blocking { background: var(--vscode-errorForeground); color: var(--vscode-editor-background); }
+.overview h2 { font-size: 1.05em; margin-top: 20px; margin-bottom: 8px; opacity: 0.85; }
+.overview section { margin-top: 16px; }
+.overview pre { background: var(--vscode-textBlockQuote-background); padding: 8px; border-radius: 4px; overflow-x: auto; white-space: pre-wrap; }
+.overview ul { list-style: none; padding: 0; margin: 0; }
+.overview .reviewers li { display: flex; gap: 8px; align-items: center; padding: 2px 0; }
+.overview .reviewer-accepted { color: var(--vscode-testing-iconPassed); }
+.overview .reviewer-rejected { color: var(--vscode-errorForeground); }
+.overview .reviewer-status { font-size: 0.85em; opacity: 0.7; }
+.overview .files li { font-family: var(--vscode-editor-font-family); padding: 2px 0; }
+.overview .file-status { display: inline-block; width: 16px; opacity: 0.7; }
+.overview .file-status-added { color: var(--vscode-gitDecoration-addedResourceForeground); }
+.overview .file-status-removed { color: var(--vscode-gitDecoration-deletedResourceForeground); }
+.overview .file-status-modified { color: var(--vscode-gitDecoration-modifiedResourceForeground); }
+.overview .timeline li { border-left: 2px solid var(--vscode-textBlockQuote-border); padding: 8px 12px; margin-bottom: 8px; }
+.overview .timeline li header { display: flex; gap: 8px; align-items: baseline; opacity: 0.85; }
+.overview .timeline li time { font-size: 0.85em; opacity: 0.7; }
+.overview .timeline li em { font-size: 0.85em; opacity: 0.7; }
+.overview .actions textarea { width: 100%; box-sizing: border-box; min-height: 80px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); padding: 6px; }
+.overview .actions .buttons { display: flex; gap: 8px; margin-top: 8px; }
+.overview .actions button { padding: 6px 12px; background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: 1px solid var(--vscode-button-border, transparent); cursor: pointer; }
+.overview .actions button:disabled { opacity: 0.5; cursor: not-allowed; }
+.overview .actions button:hover:not(:disabled) { background: var(--vscode-button-hoverBackground); }

@@ -1,0 +1,41 @@
+/*---------------------------------------------------------------------------------------------
+ *  Adapted from vscode-pull-request-github (MIT License, Copyright Microsoft Corporation).
+ *--------------------------------------------------------------------------------------------*/
+
+function done<T>(promise: Promise<T>): Promise<void> {
+	return promise.then<void>(() => undefined);
+}
+
+export function throttle<T>(fn: () => Promise<T>): () => Promise<T> {
+	let current: Promise<T> | undefined;
+	let next: Promise<T> | undefined;
+
+	const trigger = (): Promise<T> => {
+		if (next) {
+			return next;
+		}
+		if (current) {
+			next = done(current).then(() => {
+				next = undefined;
+				return trigger();
+			});
+			return next;
+		}
+		current = fn();
+		const clear = () => (current = undefined);
+		done(current).then(clear, clear);
+		return current;
+	};
+
+	return trigger;
+}
+
+export function debounce<T extends (...args: any[]) => any>(fn: T, delay: number): (...args: Parameters<T>) => void {
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	return (...args: Parameters<T>) => {
+		if (timer) {
+			clearTimeout(timer);
+		}
+		timer = setTimeout(() => fn(...args), delay);
+	};
+}

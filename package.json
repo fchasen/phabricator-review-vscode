@@ -1,0 +1,139 @@
+{
+	"name": "vscode-phab",
+	"displayName": "Mozilla Phabricator",
+	"description": "Review and create Phabricator revisions on Mozilla's instance.",
+	"version": "0.0.1",
+	"publisher": "mozilla",
+	"license": "MPL-2.0",
+	"engines": {
+		"vscode": "^1.90.0",
+		"node": ">=18"
+	},
+	"categories": [
+		"SCM Providers"
+	],
+	"activationEvents": [
+		"onStartupFinished",
+		"onFileSystem:phab"
+	],
+	"main": "./dist/extension.js",
+	"contributes": {
+		"viewsContainers": {
+			"activitybar": [
+				{
+					"id": "phabricator",
+					"title": "Mozilla Phabricator",
+					"icon": "resources/icons/phabricator.svg"
+				}
+			]
+		},
+		"views": {
+			"phabricator": [
+				{
+					"id": "phabricator:login",
+					"name": "Phabricator",
+					"when": "phabricator.session == 'unauthenticated'"
+				},
+				{
+					"id": "phabricator:revisions",
+					"name": "Revisions",
+					"when": "phabricator.session == 'authenticated'"
+				}
+			]
+		},
+		"viewsWelcome": [
+			{
+				"view": "phabricator:login",
+				"contents": "Sign in to Mozilla Phabricator to review revisions.\n\n[Sign In](command:phabricator.signIn)\n\nThis extension uses a Conduit API token from [phabricator.services.mozilla.com](https://phabricator.services.mozilla.com/conduit/login)."
+			}
+		],
+		"commands": [
+			{
+				"command": "phabricator.signIn",
+				"title": "Sign In",
+				"category": "Phabricator"
+			},
+			{
+				"command": "phabricator.signOut",
+				"title": "Sign Out",
+				"category": "Phabricator"
+			},
+			{
+				"command": "phabricator.refresh",
+				"title": "Refresh",
+				"category": "Phabricator",
+				"icon": "$(refresh)"
+			},
+			{
+				"command": "phabricator.openRevision",
+				"title": "Open Revision",
+				"category": "Phabricator"
+			},
+			{
+				"command": "phabricator.openInBrowser",
+				"title": "Open in Browser",
+				"category": "Phabricator"
+			}
+		],
+		"menus": {
+			"view/title": [
+				{
+					"command": "phabricator.refresh",
+					"when": "view == phabricator:revisions",
+					"group": "navigation"
+				}
+			],
+			"view/item/context": [
+				{
+					"command": "phabricator.openInBrowser",
+					"when": "view == phabricator:revisions && viewItem == revision",
+					"group": "inline"
+				}
+			]
+		},
+		"configuration": {
+			"title": "Mozilla Phabricator",
+			"properties": {
+				"phabricator.baseUrl": {
+					"type": "string",
+					"default": "https://phabricator.services.mozilla.com/api/",
+					"description": "Conduit API base URL. Must end with /api/."
+				},
+				"phabricator.refreshIntervalSeconds": {
+					"type": "number",
+					"default": 300,
+					"minimum": 30,
+					"description": "How often to poll Phabricator for revision updates while the editor is focused."
+				}
+			}
+		}
+	},
+	"scripts": {
+		"vscode:prepublish": "npm run build",
+		"build:client-types": "cd phabricator-client && npm run build:types",
+		"build": "npm run build:client-types && webpack --mode production",
+		"watch": "npm run build:client-types && webpack --watch --mode development",
+		"compile": "tsc -p tsconfig.json --noEmit",
+		"lint": "eslint src webviews",
+		"test:client": "cd phabricator-client && npm test",
+		"test": "npm run test:client"
+	},
+	"dependencies": {
+		"phabricator-client": "file:./phabricator-client",
+		"react": "^18.3.1",
+		"react-dom": "^18.3.1"
+	},
+	"devDependencies": {
+		"@types/node": "^20.12.0",
+		"@types/react": "^18.3.0",
+		"@types/react-dom": "^18.3.0",
+		"@types/vscode": "^1.90.0",
+		"css-loader": "^7.1.4",
+		"esbuild-loader": "^4.2.0",
+		"fork-ts-checker-webpack-plugin": "^9.0.2",
+		"style-loader": "^4.0.0",
+		"typescript": "^5.4.0",
+		"webpack": "^5.94.0",
+		"webpack-cli": "^5.1.4"
+	}
+}
