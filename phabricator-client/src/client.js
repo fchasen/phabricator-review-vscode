@@ -302,40 +302,51 @@ class PhabricatorClient {
 	}
 
 	/**
-	 * Post an inline comment on a diff. Pairs the inline transaction with a
-	 * `comment` transaction so Phabricator publishes it (otherwise it stays
-	 * a draft).
+	 * Create a draft inline comment via the legacy `differential.createinline`
+	 * endpoint. Phabricator stores it as a draft visible only to the author;
+	 * it gets promoted to a published inline the next time the same user
+	 * fires a revision-level transaction (comment / accept / reject) via
+	 * `differential.revision.edit`.
 	 *
-	 * @param {string|number} revIdOrPHID
+	 * Note: Phabricator's `lineLength` is "additional lines after the first",
+	 * so a single-line comment uses `lineLength: 0`, a 3-line comment uses
+	 * `lineLength: 2`. We translate `length` (number of lines) to that form.
+	 *
 	 * @param {{
-	 *   diffPHID: string,
+	 *   diffId: number,
 	 *   path: string,
 	 *   line: number,
 	 *   length?: number,
 	 *   isNewFile: boolean,
 	 *   content: string,
-	 *   replyToCommentPHID?: string,
-	 *   submitMessage?: string
-	 * }} inline
-	 * @returns {Promise<EditResult>}
+	 *   replyToCommentPHID?: string
+	 * }} args
+	 * @returns {Promise<{ phid: string }>}
 	 */
-	inlineComment(revIdOrPHID, inline) {
-		const inlineValue = {
-			diffPHID: inline.diffPHID,
-			path: inline.path,
-			line: inline.line,
-			length: inline.length || 0,
-			isNewFile: inline.isNewFile,
-			content: inline.content,
-			replyToCommentPHID: inline.replyToCommentPHID,
-		};
-		return this.editRevision({
-			objectIdentifier: revIdOrPHID,
-			transactions: [
-				{ type: 'inline', value: inlineValue },
-				{ type: 'comment', value: inline.submitMessage || '' },
-			],
+	async createInline(args) {
+		const lineLength = Math.max(0, (args.length || 1) - 1);
+		/** @type {any} */
+		const result = await this.call('differential.createinline', {
+			diffID: args.diffId,
+			filePath: args.path,
+			lineNumber: args.line,
+			lineLength,
+			isNewFile: args.isNewFile,
+			content: args.content,
+			replyToCommentPHID: args.replyToCommentPHID,
 		});
+		return { phid: result?.phid || result?.id || '' };
+	}
+
+	/**
+	 * Delete a draft inline comment by PHID. Only works on drafts owned by
+	 * the authenticated user.
+	 *
+	 * @param {string} phid
+	 * @returns {Promise<void>}
+	 */
+	async deleteInline(phid) {
+		await this.call('differential.deleteinline', { phid });
 	}
 
 	// -------------------------------------------------------------- create / update

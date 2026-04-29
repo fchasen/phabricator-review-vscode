@@ -205,6 +205,13 @@ export class RevisionModel {
 		this._onDidChange.fire();
 	}
 
+	/**
+	 * Create a draft inline comment. Phabricator stores it as a private draft
+	 * for the authenticated user; it is published as part of the next
+	 * top-level transaction (comment / accept / requestChanges).
+	 *
+	 * Returns the draft PHID so callers can render or delete it later.
+	 */
 	public async postInlineComment(args: {
 		diffPHID: string;
 		path: string;
@@ -213,11 +220,38 @@ export class RevisionModel {
 		isNewFile: boolean;
 		content: string;
 		replyToCommentPHID?: string;
-		submitMessage?: string;
-	}): Promise<void> {
-		await this._client.inlineComment(this._revision.phid, args);
-		this._transactions = undefined;
-		this._onDidChange.fire();
+	}): Promise<{ phid: string }> {
+		const diff = await this.getActiveDiff();
+		if (!diff || diff.phid !== args.diffPHID) {
+			// fall back to looking up by phid
+			const iter = this._client.searchDiffs({ phids: [args.diffPHID] });
+			const result = await iter.next();
+			if (result.done || !result.value) {
+				throw new Error(`Diff ${args.diffPHID} not found`);
+			}
+		}
+		const diffId = (diff && diff.phid === args.diffPHID ? diff.id : 0) || (await this._lookupDiffId(args.diffPHID));
+		const created = await this._client.createInline({
+			diffId,
+			path: args.path,
+			line: args.line,
+			length: args.length,
+			isNewFile: args.isNewFile,
+			content: args.content,
+			replyToCommentPHID: args.replyToCommentPHID,
+		});
+		// Drafts don't appear in transaction.search until published, so don't
+		// invalidate the transactions cache here.
+		return created;
+	}
+
+	private async _lookupDiffId(diffPHID: string): Promise<number> {
+		const iter = this._client.searchDiffs({ phids: [diffPHID] });
+		const result = await iter.next();
+		if (result.done || !result.value) {
+			throw new Error(`Diff ${diffPHID} not found`);
+		}
+		return result.value.id;
 	}
 
 	public dispose(): void {

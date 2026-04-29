@@ -119,17 +119,21 @@ export class RevisionCommentController extends Disposable {
 		}
 
 		const range = thread.range || new vscode.Range(0, 0, 0, 0);
+		const numLines = Math.max(1, range.end.line - range.start.line + 1);
 		await model.postInlineComment({
 			diffPHID: params.diffPHID,
 			path: params.fileName,
 			isNewFile: params.side === 'after',
 			line: range.start.line + 1,
-			length: Math.max(0, range.end.line - range.start.line),
+			length: numLines,
 			content: body,
 			replyToCommentPHID: replyToPHID,
 		});
 
 		thread.dispose();
+		vscode.window.showInformationMessage(
+			`Draft inline saved on ${model.monogram}. Submit a top-level review (Comment / Accept / Request Changes) to publish.`,
+		);
 	}
 
 	private _provideCommentingRanges(document: vscode.TextDocument): vscode.Range[] | undefined {

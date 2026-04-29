@@ -75,32 +75,46 @@ test('accept posts an accept transaction with optional comment', async () => {
 	]);
 });
 
-test('inlineComment pairs inline transaction with a comment', async () => {
+test('createInline calls differential.createinline with translated lineLength', async () => {
 	const { fetchImpl, calls } = mockFetch([
-		{ body: { result: { object: 'PHID-DREV-1', transactions: [] }, error_code: null, error_info: null } },
+		{ body: { result: { phid: 'PHID-XACT-inline-new' }, error_code: null, error_info: null } },
 	]);
 	const client = new PhabricatorClient({ token: 't', fetch: fetchImpl });
 
-	await client.inlineComment('D1', {
-		diffPHID: 'PHID-DIFF-x',
+	await client.createInline({
+		diffId: 17,
 		path: 'js/util.js',
 		line: 42,
+		length: 1,
 		isNewFile: true,
 		content: 'nit: typo',
 	});
 
 	const decoded = decodeBody(calls[0].body);
-	assert.equal(decoded.params.transactions.length, 2);
-	assert.equal(decoded.params.transactions[0].type, 'inline');
-	assert.deepEqual(decoded.params.transactions[0].value, {
-		diffPHID: 'PHID-DIFF-x',
-		path: 'js/util.js',
-		line: 42,
-		length: 0,
-		isNewFile: true,
-		content: 'nit: typo',
+	assert.equal(calls[0].url.endsWith('differential.createinline'), true);
+	assert.equal(decoded.params.diffID, 17);
+	assert.equal(decoded.params.filePath, 'js/util.js');
+	assert.equal(decoded.params.lineNumber, 42);
+	assert.equal(decoded.params.lineLength, 0); // length=1 → lineLength=0
+	assert.equal(decoded.params.isNewFile, true);
+	assert.equal(decoded.params.content, 'nit: typo');
+});
+
+test('createInline lineLength is length-1 for multi-line ranges', async () => {
+	const { fetchImpl, calls } = mockFetch([
+		{ body: { result: { phid: 'p' }, error_code: null, error_info: null } },
+	]);
+	const client = new PhabricatorClient({ token: 't', fetch: fetchImpl });
+	await client.createInline({
+		diffId: 1,
+		path: 'a',
+		line: 1,
+		length: 4,
+		isNewFile: false,
+		content: 'x',
 	});
-	assert.equal(decoded.params.transactions[1].type, 'comment');
+	const decoded = decodeBody(calls[0].body);
+	assert.equal(decoded.params.lineLength, 3);
 });
 
 test('createRevision builds the expected transaction sequence', async () => {
