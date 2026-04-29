@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
 import { PhabricatorClient } from 'phabricator-client';
+import type { Changeset } from 'phabricator-client';
 import type { Revision, Diff, Transaction } from './interface';
-import { applyPatchToContent, paddedReconstruction, parseUnifiedDiff, ParsedFile } from '../common/diffHunk';
+import { synthesizeSideFromCorpus } from '../common/diffHunk';
 import { UserResolver } from './userResolver';
 import { LocalGitResolver } from './localGitResolver';
-import Logger from '../common/logger';
 
 export class RevisionModel {
 	private readonly _onDidChange = new vscode.EventEmitter<void>();
@@ -12,11 +12,8 @@ export class RevisionModel {
 
 	private _activeDiff: Diff | undefined;
 	private _activeDiffPHID: string | undefined;
-	private _rawDiffCache = new Map<string, string>();
-	private _filesCache = new Map<string, ParsedFile[]>();
+	private _changesetsCache = new Map<number, Changeset[]>();
 	private _transactions: Transaction[] | undefined;
-	private readonly _baseContentCache = new Map<string, string | null>();
-	private static _diffusionDisabled = false;
 
 	constructor(
 		private _revision: Revision,
@@ -64,8 +61,7 @@ export class RevisionModel {
 		if (revision.fields.diffPHID !== this._activeDiffPHID) {
 			this._activeDiff = undefined;
 			this._activeDiffPHID = revision.fields.diffPHID;
-			this._filesCache.clear();
-			this._rawDiffCache.clear();
+			this._changesetsCache.clear();
 		}
 		this._transactions = undefined;
 		this._onDidChange.fire();
@@ -87,19 +83,65 @@ export class RevisionModel {
 		return undefined;
 	}
 
+	/**
+	 * Fetch and cache the active diff's changesets. Each changeset includes
+	 * hunks with `corpus` text — on Mozilla's instance this is effectively
+	 * the entire file with `+`/`-`/` ` prefixes.
+	 */
+	public async getChangesets(): Promise<Changeset[]> {
+		const diff = await this.getActiveDiff();
+		if (!diff) {
+			return [];
+		}
+		const cached = this._changesetsCache.get(diff.id);
+		if (cached) {
+			return cached;
+		}
+		const result = await this._client.queryDiffs([diff.id]);
+		const queried = result.get(diff.id);
+		const changes = queried?.changes || [];
+		this._changesetsCache.set(diff.id, changes);
+		return changes;
+	}
+
+	/**
+	 * Synthesize the file content for one side from the changeset's hunks.
+	 *
+	 * For added files, the 'before' side is empty; for removed files, the
+	 * 'after' side is empty. For 'change' / move / copy, both sides come
+	 * from the corpus (which contains the entire file thanks to Mozilla
+	 * Phabricator's unlimited-context diffs).
+	 */
+	public synthesizeContent(changeset: Changeset, side: 'before' | 'after'): string {
+		if (changeset.type === ChangesetType.Add && side === 'before') {
+			return '';
+		}
+		if (changeset.type === ChangesetType.Delete && side === 'after') {
+			return '';
+		}
+		if (isBinaryFileType(changeset.fileType) || isBinaryFileType(changeset.oldFileType)) {
+			return '(binary file)\n';
+		}
+		const corpus = changeset.hunks.map((h) => h.corpus).join('');
+		return synthesizeSideFromCorpus(corpus, side);
+	}
+
+	/**
+	 * Convenience: find the changeset for a file path on a side. Returns
+	 * undefined if the diff doesn't include that path.
+	 */
+	public async findChangeset(path: string, side: 'before' | 'after'): Promise<Changeset | undefined> {
+		const changes = await this.getChangesets();
+		return changes.find((c) => (side === 'before' ? c.oldPath : c.currentPath) === path);
+	}
+
 	public async getRawDiff(diffPHID?: string): Promise<string> {
 		const phid = diffPHID || this._activeDiffPHID;
 		if (!phid) {
 			throw new Error(`Revision ${this.monogram} has no diff yet`);
 		}
-		const cached = this._rawDiffCache.get(phid);
-		if (cached !== undefined) {
-			return cached;
-		}
 		const diffId = await this._resolveDiffId(phid);
-		const raw = await this._client.getRawDiff(diffId);
-		this._rawDiffCache.set(phid, raw);
-		return raw;
+		return this._client.getRawDiff(diffId);
 	}
 
 	private async _resolveDiffId(diffPHID: string): Promise<number> {
@@ -118,124 +160,11 @@ export class RevisionModel {
 	}
 
 	/**
-	 * Reconstruct the full text of a file at the chosen side, suitable for
-	 * displaying in the diff editor with real line numbers.
-	 *
-	 * For 'before' side we fetch the base file from Diffusion and return it
-	 * verbatim. For 'after' side we apply the diff hunks to that base.
-	 *
-	 * Falls back to the hunk-only reconstruction (with potentially mismatched
-	 * line numbers) when the base content can't be fetched — better than
-	 * showing nothing.
+	 * Try to fetch a base file from a local git checkout. Best-effort.
+	 * Returns null if no repository has the commit.
 	 */
-	public async getFileFullContent(file: ParsedFile, side: 'before' | 'after'): Promise<string> {
-		if (side === 'before' && file.status === 'added') {
-			return '';
-		}
-		if (side === 'after' && file.status === 'removed') {
-			return '';
-		}
-		if (file.binary) {
-			return '(binary file)\n';
-		}
-
-		const base = await this._fetchBaseContent(file);
-		if (base === null) {
-			Logger.info(
-				`Falling back to padded hunk view for ${file.oldPath || file.newPath} (${side}); see warnings above. ` +
-					`Comment line numbers will still match.`,
-				'RevisionModel',
-			);
-			return paddedReconstruction(file.hunks, side);
-		}
-		if (side === 'before') {
-			return base;
-		}
-		return applyPatchToContent(base, file.hunks);
-	}
-
-	private async _fetchBaseContent(file: ParsedFile): Promise<string | null> {
-		const path = file.oldPath || file.newPath;
-		if (!path) {
-			Logger.warn(`Cannot fetch base content: file has no path`, 'RevisionModel');
-			return null;
-		}
-		const diff = await this.getActiveDiff();
-		if (!diff) {
-			Logger.warn(`Cannot fetch base content for ${path}: no active diff resolved`, 'RevisionModel');
-			return null;
-		}
-		const baseRef = extractBaseRef(diff);
-		const repoPHID = diff.fields.repositoryPHID || this._revision.fields.repositoryPHID;
-		if (!baseRef) {
-			Logger.warn(
-				`Cannot fetch base content for ${path}: no base ref on diff. refs=${JSON.stringify(diff.fields.refs)}`,
-				'RevisionModel',
-			);
-			return null;
-		}
-		if (!repoPHID) {
-			Logger.warn(`Cannot fetch base content for ${path}: no repositoryPHID`, 'RevisionModel');
-			return null;
-		}
-		const cacheKey = `${repoPHID}\0${baseRef}\0${path}`;
-		if (this._baseContentCache.has(cacheKey)) {
-			return this._baseContentCache.get(cacheKey) ?? null;
-		}
-
-		const local = await this._localGit.fetchFile(baseRef, path);
-		if (local !== null) {
-			Logger.info(`Got ${local.length} bytes for ${path} from local git`, 'RevisionModel');
-			this._baseContentCache.set(cacheKey, local);
-			return local;
-		}
-
-		if (RevisionModel._diffusionDisabled) {
-			this._baseContentCache.set(cacheKey, null);
-			return null;
-		}
-		Logger.info(`Local git missed; trying Diffusion for ${path}@${baseRef.slice(0, 8)}`, 'RevisionModel');
-		try {
-			const content = await this._client.getFileContent({
-				repository: repoPHID,
-				commit: baseRef,
-				path,
-			});
-			if (content === null) {
-				Logger.warn(
-					`Diffusion returned no content for ${path}@${baseRef.slice(0, 8)}. Disabling further attempts this session.`,
-					'RevisionModel',
-				);
-				RevisionModel._diffusionDisabled = true;
-			} else {
-				Logger.info(`Got ${content.length} bytes for ${path} from Diffusion`, 'RevisionModel');
-			}
-			this._baseContentCache.set(cacheKey, content);
-			return content;
-		} catch (err) {
-			Logger.warn(
-				`getFileContent threw for ${path}@${baseRef.slice(0, 8)}: ${err instanceof Error ? err.message : err}. Disabling further attempts this session.`,
-				'RevisionModel',
-			);
-			RevisionModel._diffusionDisabled = true;
-			this._baseContentCache.set(cacheKey, null);
-			return null;
-		}
-	}
-
-	public async getFiles(diffPHID?: string): Promise<ParsedFile[]> {
-		const phid = diffPHID || this._activeDiffPHID;
-		if (!phid) {
-			return [];
-		}
-		const cached = this._filesCache.get(phid);
-		if (cached) {
-			return cached;
-		}
-		const raw = await this.getRawDiff(phid);
-		const files = parseUnifiedDiff(raw);
-		this._filesCache.set(phid, files);
-		return files;
+	public async tryLocalGitBase(commit: string, path: string): Promise<string | null> {
+		return this._localGit.fetchFile(commit, path);
 	}
 
 	public async getTransactions(): Promise<Transaction[]> {
@@ -288,21 +217,18 @@ export class RevisionModel {
 	}
 }
 
-function extractBaseRef(diff: Diff): string | undefined {
-	const refs = diff.fields.refs || [];
-	const preferredOrder = ['base', 'sourceControlBaseRevision', 'merge.base', 'parent', 'onto'];
-	for (const wanted of preferredOrder) {
-		const match = refs.find((r) => r.type === wanted);
-		if (match) {
-			return match.identifier;
-		}
-	}
-	const commits = diff.attachments?.commits?.commits;
-	if (commits && commits.length > 0) {
-		const parents = commits[0].parents;
-		if (parents && parents.length > 0) {
-			return parents[0];
-		}
-	}
-	return undefined;
+enum ChangesetType {
+	Add = 1,
+	Change = 2,
+	Delete = 3,
+	MoveAway = 4,
+	CopyAway = 5,
+	MoveHere = 6,
+	CopyHere = 7,
+	MultiCopy = 8,
+}
+
+function isBinaryFileType(fileType: number): boolean {
+	// 2=image, 3=binary
+	return fileType === 2 || fileType === 3;
 }

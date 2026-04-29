@@ -239,6 +239,41 @@ export function reconstructSideFromHunks(hunks: DiffHunk[], side: 'before' | 'af
 }
 
 /**
+ * Synthesize a side ('before'/'after') from a Phabricator hunk corpus.
+ *
+ * Each line of the corpus starts with one of:
+ *   ' '  context (in both)
+ *   '-'  removed (only in 'before')
+ *   '+'  added (only in 'after')
+ *   '\\' "no newline at end of file" marker (skip)
+ *
+ * Mozilla's Phabricator emits hunks with effectively unlimited context for
+ * normal files, so the corpus contains the entire file. Concatenate every
+ * hunk's corpus in order to get the whole document.
+ */
+export function synthesizeSideFromCorpus(corpus: string, side: 'before' | 'after'): string {
+	const skipPrefix = side === 'before' ? '+' : '-';
+	const out: string[] = [];
+	const lines = corpus.split('\n');
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i];
+		// The corpus often ends with a trailing newline → empty last element.
+		if (line.length === 0 && i === lines.length - 1) {
+			break;
+		}
+		const prefix = line[0];
+		if (prefix === '\\' || prefix === undefined) {
+			continue;
+		}
+		if (prefix === skipPrefix) {
+			continue;
+		}
+		out.push(line.slice(1));
+	}
+	return out.join('\n') + (out.length ? '\n' : '');
+}
+
+/**
  * Reconstruct a side using empty padding for unchanged regions, so the
  * resulting document's line numbers match the real file's line numbers.
  *

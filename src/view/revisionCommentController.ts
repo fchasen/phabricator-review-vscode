@@ -5,6 +5,7 @@ import Logger from '../common/logger';
 import { RevisionsManager } from '../phabricator/revisionsManager';
 import { RevisionModel } from '../phabricator/revisionModel';
 import type { Transaction } from '../phabricator/interface';
+import { changesetStatus } from './treeNodes/fileChangeNode';
 
 interface InlineFields {
 	// Phorge/Phabricator emit either form depending on version.
@@ -186,14 +187,15 @@ export class RevisionCommentController extends Disposable {
 			COMPONENT,
 		);
 
-		const files = await model.getFiles().catch(() => []);
+		const changesets = await model.getChangesets().catch(() => []);
 		const fileStatusByPath = new Map<string, 'added' | 'removed' | 'modified' | 'renamed' | 'copied'>();
-		for (const f of files) {
-			if (f.newPath) {
-				fileStatusByPath.set(f.newPath, f.status);
+		for (const cs of changesets) {
+			const status = changesetStatus(cs.type);
+			if (cs.currentPath) {
+				fileStatusByPath.set(cs.currentPath, status);
 			}
-			if (f.oldPath) {
-				fileStatusByPath.set(f.oldPath, f.status);
+			if (cs.oldPath) {
+				fileStatusByPath.set(cs.oldPath, status);
 			}
 		}
 

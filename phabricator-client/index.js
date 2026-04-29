@@ -22,6 +22,11 @@ const { isPHID, phidType, PHID_TYPES } = require('./src/phid');
  * @typedef {import('./src/types').EditTransaction} EditTransaction
  * @typedef {import('./src/types').EditResult} EditResult
  * @typedef {import('./src/types').ConduitCursor} ConduitCursor
+ * @typedef {import('./src/types').Changeset} Changeset
+ * @typedef {import('./src/types').ChangesetHunk} ChangesetHunk
+ * @typedef {import('./src/types').ChangesetType} ChangesetType
+ * @typedef {import('./src/types').ChangesetFileType} ChangesetFileType
+ * @typedef {import('./src/types').QueriedDiff} QueriedDiff
  */
 
 module.exports = {

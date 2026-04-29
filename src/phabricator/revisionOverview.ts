@@ -3,6 +3,7 @@ import { WebviewBase, REVISION_OVERVIEW_VIEW_TYPE, IRequestMessage } from '../co
 import { RevisionsManager } from './revisionsManager';
 import { RevisionModel } from './revisionModel';
 import type { Transaction } from './interface';
+import { changesetStatus } from '../view/treeNodes/fileChangeNode';
 import Logger from '../common/logger';
 
 interface OverviewPayload {
@@ -142,7 +143,7 @@ export class RevisionOverviewPanel extends WebviewBase {
 	private async _buildPayload(): Promise<OverviewPayload> {
 		const revision = this._model.revision;
 		const transactions = await this._model.getTransactions();
-		const files = await this._model.getFiles().catch(() => []);
+		const changesets = await this._model.getChangesets().catch(() => []);
 		const resolver = this._manager.userResolver;
 
 		const phidsToResolve = new Set<string>();
@@ -177,7 +178,10 @@ export class RevisionOverviewPanel extends WebviewBase {
 				isBlocking: r.isBlocking,
 			})),
 			subscribers: revision.attachments.subscribers?.subscriberPHIDs || [],
-			files: files.map((f) => ({ path: f.newPath || f.oldPath || '', status: f.status })),
+			files: changesets.map((cs) => ({
+				path: cs.currentPath || cs.oldPath || '',
+				status: changesetStatus(cs.type),
+			})),
 			timeline: transactions.map((t: Transaction) => ({
 				id: t.id,
 				type: t.type,

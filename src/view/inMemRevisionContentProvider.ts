@@ -6,9 +6,9 @@ import { Disposable } from '../common/lifecycle';
 const EMPTY = new Uint8Array();
 
 /**
- * Read-only filesystem provider for phab:// URIs. Each URI is parsed to find
- * the revision/diff/file/side, and content is reconstructed from the cached
- * raw diff hunks. We never write back.
+ * Read-only filesystem provider for phab:// URIs. Each URI points at a
+ * (revision, diff, file, side); we look up the matching changeset on the
+ * revision model and synthesize the file content from its hunk corpus.
  */
 export class InMemRevisionFileSystemProvider extends Disposable implements vscode.FileSystemProvider {
 	private readonly _onDidChangeFile = this._register(new vscode.EventEmitter<vscode.FileChangeEvent[]>());
@@ -22,7 +22,7 @@ export class InMemRevisionFileSystemProvider extends Disposable implements vscod
 		return { dispose: () => undefined };
 	}
 
-	stat(uri: vscode.Uri): vscode.FileStat {
+	stat(): vscode.FileStat {
 		return {
 			type: vscode.FileType.File,
 			ctime: 0,
@@ -49,14 +49,11 @@ export class InMemRevisionFileSystemProvider extends Disposable implements vscod
 		if (!model) {
 			throw vscode.FileSystemError.FileNotFound(uri);
 		}
-		const files = await model.getFiles(params.diffPHID);
-		const file = files.find((f) =>
-			(params.side === 'before' ? f.oldPath : f.newPath) === params.fileName,
-		);
-		if (!file) {
+		const changeset = await model.findChangeset(params.fileName, params.side);
+		if (!changeset) {
 			return EMPTY;
 		}
-		const text = await model.getFileFullContent(file, params.side);
+		const text = model.synthesizeContent(changeset, params.side);
 		return new TextEncoder().encode(text);
 	}
 

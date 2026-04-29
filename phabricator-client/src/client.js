@@ -128,6 +128,39 @@ class PhabricatorClient {
 	}
 
 	/**
+	 * Fetch one or more diffs by numeric id, returning their full changesets
+	 * (file metadata + hunks with corpus text). On Mozilla's instance the
+	 * hunk corpus contains effectively the whole file, so synthesizing the
+	 * before/after content from it produces a real full-file view.
+	 *
+	 * @param {number[]} diffIds
+	 * @returns {Promise<Map<number, import('./types').QueriedDiff>>}
+	 */
+	async queryDiffs(diffIds) {
+		if (diffIds.length === 0) {
+			return new Map();
+		}
+		/** @type {Object<string, any>} */
+		const result = await this.call('differential.querydiffs', { ids: diffIds });
+		const out = /** @type {Map<number, import('./types').QueriedDiff>} */ (new Map());
+		for (const key of Object.keys(result)) {
+			const raw = result[key];
+			const id = typeof raw.id === 'number' ? raw.id : Number(raw.id);
+			out.set(id, {
+				id,
+				phid: raw.phid || null,
+				revisionPHID: raw.revisionPHID || null,
+				repositoryPHID: raw.repositoryPHID || null,
+				sourceControlBaseRevision: raw.sourceControlBaseRevision || null,
+				dateCreated: raw.dateCreated ? Number(raw.dateCreated) : null,
+				dateModified: raw.dateModified ? Number(raw.dateModified) : null,
+				changes: (raw.changes || []).map(normalizeChangeset),
+			});
+		}
+		return out;
+	}
+
+	/**
 	 * Fetch a file's content from Diffusion at a given commit. Used to
 	 * reconstruct full-file diff views.
 	 *
@@ -498,6 +531,49 @@ function decodeBase64(input) {
 		return atob(input);
 	}
 	return input;
+}
+
+/**
+ * @param {any} raw
+ * @returns {import('./types').Changeset}
+ */
+function normalizeChangeset(raw) {
+	const id = typeof raw.id === 'number' ? raw.id : Number(raw.id) || 0;
+	const oldPath = raw.oldPath && raw.oldPath.length > 0 ? String(raw.oldPath) : null;
+	const currentPath = raw.currentPath ? String(raw.currentPath) : '';
+	const type = (typeof raw.type === 'number' ? raw.type : Number(raw.type)) || 2;
+	const fileType = (typeof raw.fileType === 'number' ? raw.fileType : Number(raw.fileType)) || 1;
+	const oldFileType = (typeof raw.oldFileType === 'number' ? raw.oldFileType : Number(raw.oldFileType)) || 1;
+	const addLines = (typeof raw.addLines === 'number' ? raw.addLines : Number(raw.addLines)) || 0;
+	const delLines = (typeof raw.delLines === 'number' ? raw.delLines : Number(raw.delLines)) || 0;
+	/** @type {Object<string, string>} */
+	const metadata = {};
+	if (raw.metadata && typeof raw.metadata === 'object') {
+		for (const k of Object.keys(raw.metadata)) {
+			const v = raw.metadata[k];
+			metadata[k] = typeof v === 'string' ? v : String(v);
+		}
+	}
+	const hunks = (raw.hunks || []).map(/** @param {any} h */ (h) => ({
+		oldOffset: Number(h.oldOffset) || 0,
+		oldLength: Number(h.oldLength) || 0,
+		newOffset: Number(h.newOffset) || 0,
+		newLength: Number(h.newLength) || 0,
+		corpus: typeof h.corpus === 'string' ? h.corpus : '',
+	}));
+	return {
+		id,
+		oldPath,
+		currentPath,
+		awayPaths: Array.isArray(raw.awayPaths) ? raw.awayPaths.map(String) : [],
+		type: /** @type {any} */ (type),
+		fileType: /** @type {any} */ (fileType),
+		oldFileType: /** @type {any} */ (oldFileType),
+		addLines,
+		delLines,
+		metadata,
+		hunks,
+	};
 }
 
 module.exports = { PhabricatorClient };

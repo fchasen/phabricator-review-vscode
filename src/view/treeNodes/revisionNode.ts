@@ -32,13 +32,13 @@ export class RevisionNode extends vscode.TreeItem {
 
 	public async getChildren(): Promise<vscode.TreeItem[]> {
 		try {
-			const files = await this.model.getFiles();
-			if (files.length === 0) {
+			const changesets = await this.model.getChangesets();
+			if (changesets.length === 0) {
 				const empty = new vscode.TreeItem('No files in this diff');
 				empty.contextValue = 'empty';
 				return [empty];
 			}
-			return files.map((file) => new FileChangeNode(this.model, file));
+			return changesets.map((cs) => new FileChangeNode(this.model, cs));
 		} catch (err) {
 			const error = new vscode.TreeItem(`Failed to load diff: ${err instanceof Error ? err.message : err}`);
 			error.iconPath = new vscode.ThemeIcon('error');

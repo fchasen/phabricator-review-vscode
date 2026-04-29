@@ -215,4 +215,55 @@
  * @property {string[]} transactions
  */
 
+/**
+ * @typedef {Object} ChangesetHunk
+ * @property {number} oldOffset
+ * @property {number} oldLength
+ * @property {number} newOffset
+ * @property {number} newLength
+ * @property {string} corpus  Full unified-diff text for the hunk; each line
+ *   begins with ' ' (context), '+' (added), '-' (removed), or '\\'
+ *   (no-newline marker). Mozilla's instance emits effectively unlimited
+ *   context, so the corpus often contains the whole file.
+ */
+
+/**
+ * Phabricator file-change types from `differential.querydiffs`.
+ * @typedef {1|2|3|4|5|6|7|8} ChangesetType
+ *   1=add, 2=change, 3=delete, 4=moveAway, 5=copyAway,
+ *   6=moveHere, 7=copyHere, 8=multicopy
+ */
+
+/**
+ * @typedef {1|2|3|4|5|6|7} ChangesetFileType
+ *   1=text, 2=image, 3=binary, 4=directory, 5=symlink, 6=deleted, 7=normal
+ */
+
+/**
+ * @typedef {Object} Changeset
+ * @property {number} id
+ * @property {string|null} oldPath
+ * @property {string} currentPath
+ * @property {string[]} awayPaths
+ * @property {ChangesetType} type
+ * @property {ChangesetFileType} fileType
+ * @property {ChangesetFileType} oldFileType
+ * @property {number} addLines
+ * @property {number} delLines
+ * @property {Object<string, string>} metadata
+ * @property {ChangesetHunk[]} hunks
+ */
+
+/**
+ * @typedef {Object} QueriedDiff
+ * @property {number} id
+ * @property {string|null} phid
+ * @property {string|null} revisionPHID
+ * @property {string|null} repositoryPHID
+ * @property {string|null} sourceControlBaseRevision
+ * @property {number|null} dateCreated
+ * @property {number|null} dateModified
+ * @property {Changeset[]} changes
+ */
+
 module.exports = {};
