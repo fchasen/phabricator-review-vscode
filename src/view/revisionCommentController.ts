@@ -7,12 +7,22 @@ import { RevisionModel } from '../phabricator/revisionModel';
 import type { Transaction } from '../phabricator/interface';
 
 interface InlineFields {
+	// Phorge/Phabricator emit either form depending on version.
 	diffPHID?: string;
+	diff?: { phid?: string; id?: number };
 	path?: string;
 	isNewFile?: boolean;
 	line?: number;
 	length?: number;
 	replyToCommentPHID?: string | null;
+}
+
+function inlineDiffPHID(fields: InlineFields): string | undefined {
+	return fields.diffPHID || fields.diff?.phid;
+}
+
+function isInlineTransaction(type: string): boolean {
+	return type === 'inline' || type === 'differential.inline' || type === 'differential:inline';
 }
 
 const COMPONENT = 'CommentController';
@@ -31,7 +41,9 @@ const COMPONENT = 'CommentController';
 export class RevisionCommentController extends Disposable {
 	private readonly _controller: vscode.CommentController;
 	private readonly _threadsByRevision = new Map<string, vscode.CommentThread[]>();
-	private readonly _refreshing = new Set<string>();
+	private readonly _loaded = new Set<string>();
+	private readonly _modelSubscriptions = new Map<string, vscode.Disposable>();
+	private readonly _inFlight = new Map<string, Promise<void>>();
 
 	constructor(private readonly _manager: RevisionsManager) {
 		super();
@@ -66,6 +78,8 @@ export class RevisionCommentController extends Disposable {
 			}),
 		);
 
+		this._register({ dispose: () => this._disposeAllThreads() });
+
 		for (const editor of vscode.window.visibleTextEditors) {
 			if (editor.document.uri.scheme === PHAB_SCHEME) {
 				this._ensureThreadsForUri(editor.document.uri).catch((err) =>
@@ -99,13 +113,12 @@ export class RevisionCommentController extends Disposable {
 		if (!model) {
 			throw new Error(`Revision ${params.revisionId} not found`);
 		}
-		const session = this._manager.session;
-		if (!session) {
+		if (!this._manager.session) {
 			throw new Error('Not signed in');
 		}
 
 		const range = thread.range || new vscode.Range(0, 0, 0, 0);
-		await session.client.inlineComment(model.phid, {
+		await model.postInlineComment({
 			diffPHID: params.diffPHID,
 			path: params.fileName,
 			isNewFile: params.side === 'after',
@@ -116,7 +129,6 @@ export class RevisionCommentController extends Disposable {
 		});
 
 		thread.dispose();
-		await this._refreshThreadsFor(model);
 	}
 
 	private _provideCommentingRanges(document: vscode.TextDocument): vscode.Range[] | undefined {
@@ -131,23 +143,59 @@ export class RevisionCommentController extends Disposable {
 		if (!params) {
 			return;
 		}
-		if (this._refreshing.has(params.revisionPHID)) {
+		const phid = params.revisionPHID;
+		if (this._loaded.has(phid)) {
 			return;
 		}
-		this._refreshing.add(params.revisionPHID);
-		try {
-			const model = await this._manager.getOrFetchRevision(params.revisionPHID);
-			if (model) {
-				await this._refreshThreadsFor(model);
-			}
-		} finally {
-			this._refreshing.delete(params.revisionPHID);
+		const inFlight = this._inFlight.get(phid);
+		if (inFlight) {
+			return inFlight;
 		}
+		const work = (async () => {
+			const model = await this._manager.getOrFetchRevision(phid);
+			if (!model) {
+				return;
+			}
+			this._subscribeToModel(model);
+			await this._refreshThreadsFor(model);
+			this._loaded.add(phid);
+		})().finally(() => {
+			this._inFlight.delete(phid);
+		});
+		this._inFlight.set(phid, work);
+		return work;
+	}
+
+	private _subscribeToModel(model: RevisionModel): void {
+		if (this._modelSubscriptions.has(model.phid)) {
+			return;
+		}
+		const sub = model.onDidChange(() => {
+			this._refreshThreadsFor(model).catch((err) =>
+				Logger.warn(`refresh after model change failed: ${err instanceof Error ? err.message : err}`, COMPONENT),
+			);
+		});
+		this._modelSubscriptions.set(model.phid, sub);
 	}
 
 	private async _refreshThreadsFor(model: RevisionModel): Promise<void> {
 		const transactions = await model.getTransactions();
-		const inlines = transactions.filter((t) => t.type === 'inline');
+		const inlines = transactions.filter((t) => isInlineTransaction(t.type));
+		Logger.info(
+			`${model.monogram}: ${inlines.length} inline transaction(s) of ${transactions.length} total`,
+			COMPONENT,
+		);
+
+		const files = await model.getFiles().catch(() => []);
+		const fileStatusByPath = new Map<string, 'added' | 'removed' | 'modified' | 'renamed' | 'copied'>();
+		for (const f of files) {
+			if (f.newPath) {
+				fileStatusByPath.set(f.newPath, f.status);
+			}
+			if (f.oldPath) {
+				fileStatusByPath.set(f.oldPath, f.status);
+			}
+		}
 
 		const existing = this._threadsByRevision.get(model.phid);
 		if (existing) {
@@ -158,11 +206,17 @@ export class RevisionCommentController extends Disposable {
 		for (const group of groupReplies(inlines)) {
 			const head = group[0];
 			const fields = (head.fields as InlineFields) || {};
-			if (!fields.path || !fields.diffPHID || fields.line === undefined) {
+			const diffPHID = inlineDiffPHID(fields);
+			if (!fields.path || !diffPHID || fields.line === undefined) {
+				Logger.debug(
+					`skipping inline ${head.phid}: missing path/diffPHID/line (${JSON.stringify(fields)})`,
+					COMPONENT,
+				);
 				continue;
 			}
 			const side: 'before' | 'after' = fields.isNewFile ? 'after' : 'before';
-			const uri = phabFileUri(model, fields.diffPHID, fields.path, side);
+			const status = fileStatusByPath.get(fields.path) || 'modified';
+			const uri = phabFileUri(model, diffPHID, fields.path, side, status);
 			const startLine = Math.max(0, fields.line - 1);
 			const endLine = Math.max(startLine, startLine + (fields.length || 0));
 			const range = new vscode.Range(startLine, 0, endLine, 0);
@@ -188,8 +242,10 @@ export class RevisionCommentController extends Disposable {
 			thread.collapsibleState = vscode.CommentThreadCollapsibleState.Collapsed;
 			thread.canReply = true;
 			threads.push(thread);
+			Logger.debug(`thread on ${uri.toString()} @ L${fields.line}`, COMPONENT);
 		}
 
+		Logger.info(`${model.monogram}: ${threads.length} comment thread(s) attached`, COMPONENT);
 		this._threadsByRevision.set(model.phid, threads);
 	}
 
@@ -198,17 +254,29 @@ export class RevisionCommentController extends Disposable {
 			threads.forEach((t) => t.dispose());
 		}
 		this._threadsByRevision.clear();
+		for (const sub of this._modelSubscriptions.values()) {
+			sub.dispose();
+		}
+		this._modelSubscriptions.clear();
+		this._loaded.clear();
+		this._inFlight.clear();
 	}
 }
 
-function phabFileUri(model: RevisionModel, diffPHID: string, path: string, side: 'before' | 'after'): vscode.Uri {
+function phabFileUri(
+	model: RevisionModel,
+	diffPHID: string,
+	path: string,
+	side: 'before' | 'after',
+	status: 'added' | 'removed' | 'modified' | 'renamed' | 'copied',
+): vscode.Uri {
 	const params: PhabUriParams = {
 		revisionId: model.id,
 		revisionPHID: model.phid,
 		diffPHID,
 		fileName: path,
 		side,
-		status: 'modified',
+		status,
 	};
 	const query = encodeURIComponent(JSON.stringify(params));
 	return vscode.Uri.parse(`${PHAB_SCHEME}://D${model.id}/${side}/${path}?${query}`);

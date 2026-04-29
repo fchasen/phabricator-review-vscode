@@ -4,6 +4,7 @@ import { Disposable } from '../common/lifecycle';
 import Logger, { REVISION_TREE } from '../common/logger';
 import { UserResolver } from './userResolver';
 import { RevisionModel } from './revisionModel';
+import { LocalGitResolver } from './localGitResolver';
 import type { Revision } from './interface';
 import type { RevisionStatus } from 'phabricator-client';
 
@@ -27,6 +28,7 @@ export class RevisionsManager extends Disposable {
 
 	private _userResolver: UserResolver | undefined;
 	private _projectMembership: string[] = [];
+	public readonly localGit = new LocalGitResolver();
 	private readonly _categoryCache = new Map<CategoryKey, RevisionModel[]>();
 	private readonly _byPHID = new Map<string, RevisionModel>();
 	private readonly _byId = new Map<number, RevisionModel>();
@@ -161,7 +163,7 @@ export class RevisionsManager extends Disposable {
 		if (!session) {
 			throw new Error('cannot adopt revision without an active session');
 		}
-		const model = new RevisionModel(revision, session.client, this._userResolver!);
+		const model = new RevisionModel(revision, session.client, this._userResolver!, this.localGit);
 		this._byPHID.set(revision.phid, model);
 		this._byId.set(revision.id, model);
 		return model;

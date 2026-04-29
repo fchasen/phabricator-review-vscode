@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import { RevisionsManager } from '../phabricator/revisionsManager';
-import { reconstructSideFromHunks } from '../common/diffHunk';
 import { fromPhabUri } from '../common/uri';
 import { Disposable } from '../common/lifecycle';
 
@@ -51,21 +50,13 @@ export class InMemRevisionFileSystemProvider extends Disposable implements vscod
 			throw vscode.FileSystemError.FileNotFound(uri);
 		}
 		const files = await model.getFiles(params.diffPHID);
-		const file = files.find((f) => {
-			const candidate = params.side === 'before' ? f.oldPath : f.newPath;
-			return candidate === params.fileName;
-		});
+		const file = files.find((f) =>
+			(params.side === 'before' ? f.oldPath : f.newPath) === params.fileName,
+		);
 		if (!file) {
-			if ((params.side === 'before' && params.status === 'added') ||
-				(params.side === 'after' && params.status === 'removed')) {
-				return EMPTY;
-			}
 			return EMPTY;
 		}
-		if (file.binary) {
-			return new TextEncoder().encode('(binary file)\n');
-		}
-		const text = reconstructSideFromHunks(file.hunks, params.side);
+		const text = await model.getFileFullContent(file, params.side);
 		return new TextEncoder().encode(text);
 	}
 

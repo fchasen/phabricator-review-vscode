@@ -117,11 +117,59 @@ class PhabricatorClient {
 	}
 
 	/**
-	 * @param {string} diffPHID
+	 * Fetch the unified-diff text for a diff. Conduit requires the numeric
+	 * diff id (not the PHID) — pass an integer.
+	 *
+	 * @param {number} diffId
 	 * @returns {Promise<string>}
 	 */
-	getRawDiff(diffPHID) {
-		return this.call('differential.getrawdiff', { diffID: diffPHID });
+	getRawDiff(diffId) {
+		return this.call('differential.getrawdiff', { diffID: diffId });
+	}
+
+	/**
+	 * Fetch a file's content from Diffusion at a given commit. Used to
+	 * reconstruct full-file diff views.
+	 *
+	 * Returns the file body as a string, or null if the file cannot be
+	 * resolved (commit unknown, file absent, endpoint missing on the
+	 * Phabricator instance).
+	 *
+	 * @param {{ repository: string, commit: string, path: string }} args
+	 *   `repository` accepts a callsign, shortName, or PHID.
+	 * @returns {Promise<string|null>}
+	 */
+	async getFileContent(args) {
+		/** @type {any} */
+		let result;
+		try {
+			result = await this.call('diffusion.filecontentquery', {
+				repositoryPHID: args.repository,
+				commit: args.commit,
+				path: args.path,
+			});
+		} catch (err) {
+			this._state.log('warn', `diffusion.filecontentquery rejected: ${err && /** @type {any} */ (err).code || err}`);
+			return null;
+		}
+		if (!result || !result.filePHID) {
+			this._state.log('warn', 'diffusion.filecontentquery returned no filePHID', {
+				tooSlow: result?.tooSlow,
+				tooHuge: result?.tooHuge,
+			});
+			return null;
+		}
+		try {
+			/** @type {any} */
+			const base64 = await this.call('file.download', { phid: result.filePHID });
+			if (typeof base64 !== 'string' || base64.length === 0) {
+				return null;
+			}
+			return decodeBase64(base64);
+		} catch (err) {
+			this._state.log('warn', `file.download failed: ${err && /** @type {any} */ (err).code || err}`);
+			return null;
+		}
 	}
 
 	/**
@@ -431,6 +479,25 @@ class PhabricatorClient {
 		}
 		return out;
 	}
+}
+
+/**
+ * Cross-runtime base64 decoder. Uses Node's Buffer when present, falls back
+ * to atob in browsers.
+ *
+ * @param {string} input
+ * @returns {string}
+ */
+function decodeBase64(input) {
+	/** @type {any} */
+	const g = globalThis;
+	if (g.Buffer) {
+		return g.Buffer.from(input, 'base64').toString('utf8');
+	}
+	if (typeof atob === 'function') {
+		return atob(input);
+	}
+	return input;
 }
 
 module.exports = { PhabricatorClient };

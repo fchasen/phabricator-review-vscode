@@ -237,3 +237,84 @@ export function reconstructSideFromHunks(hunks: DiffHunk[], side: 'before' | 'af
 	}
 	return lines.join('\n') + (lines.length ? '\n' : '');
 }
+
+/**
+ * Reconstruct a side using empty padding for unchanged regions, so the
+ * resulting document's line numbers match the real file's line numbers.
+ *
+ * Used when we can't fetch base content but still want inline comments to
+ * anchor on the right line. Lines outside any hunk become empty.
+ */
+export function paddedReconstruction(hunks: DiffHunk[], side: 'before' | 'after'): string {
+	const skipType = side === 'before' ? DiffChangeType.Add : DiffChangeType.Delete;
+	const lines: string[] = [];
+	const padTo = (target: number) => {
+		while (lines.length < target) {
+			lines.push('');
+		}
+	};
+	for (const hunk of hunks) {
+		const startLine = side === 'before' ? hunk.oldLineNumber : hunk.newLineNumber;
+		padTo(startLine - 1);
+		for (const diffLine of hunk.diffLines) {
+			if (diffLine.type === skipType) {
+				continue;
+			}
+			const lineNumber = side === 'before' ? diffLine.oldLineNumber : diffLine.newLineNumber;
+			if (lineNumber > 0) {
+				padTo(lineNumber - 1);
+			}
+			lines.push(diffLine.text.length > 0 ? diffLine.text.slice(1) : '');
+		}
+	}
+	return lines.join('\n') + (lines.length ? '\n' : '');
+}
+
+/**
+ * Apply a unified-diff patch on top of the original full-file content to
+ * produce the modified file. Adapted from the reference's
+ * `getModifiedContentFromDiffHunk`, corrected for our representation where
+ * `diffLine.text` retains the leading `+`/`-`/` ` prefix character.
+ */
+export function applyPatchToContent(originalContent: string, hunks: DiffHunk[]): string {
+	const left = originalContent.split(/\r?\n/);
+	const right: string[] = [];
+	let lastCommonLine = 0;
+	let lastDiffLineEndsWithNewline = true;
+
+	for (let h = 0; h < hunks.length; h++) {
+		const hunk = hunks[h];
+		const oriStartLine = hunk.oldLineNumber;
+
+		for (let j = lastCommonLine + 1; j < oriStartLine; j++) {
+			right.push(left[j - 1]);
+		}
+		lastCommonLine = oriStartLine + hunk.oldLength - 1;
+
+		for (const diffLine of hunk.diffLines) {
+			if (diffLine.type === DiffChangeType.Delete || diffLine.type === DiffChangeType.Control) {
+				continue;
+			}
+			right.push(diffLine.text.length > 0 ? diffLine.text.slice(1) : '');
+		}
+
+		if (h === hunks.length - 1) {
+			for (let k = hunk.diffLines.length - 1; k >= 0; k--) {
+				if (hunk.diffLines[k].type !== DiffChangeType.Delete) {
+					lastDiffLineEndsWithNewline = hunk.diffLines[k].endwithLineBreak;
+					break;
+				}
+			}
+		}
+	}
+
+	if (lastDiffLineEndsWithNewline) {
+		if (lastCommonLine < left.length) {
+			for (let j = lastCommonLine + 1; j <= left.length; j++) {
+				right.push(left[j - 1]);
+			}
+		}
+	}
+
+	return right.join('\n');
+}
