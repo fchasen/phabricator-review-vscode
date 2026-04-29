@@ -251,9 +251,6 @@ function extractInlineLink(
 	t: Transaction,
 	statusByPath: Map<string, ReturnType<typeof changesetStatus>>,
 ): InlineLink | undefined {
-	if (t.type !== 'inline' && t.type !== 'differential.inline' && t.type !== 'differential:inline') {
-		return undefined;
-	}
 	const fields = t.fields as Record<string, unknown> & {
 		diff?: { phid?: string };
 		diffPHID?: string;
@@ -263,6 +260,8 @@ function extractInlineLink(
 		length?: number;
 	};
 	const diffPHID = fields.diffPHID || fields.diff?.phid;
+	// Detect by the presence of inline anchor fields, since Phorge variants
+	// emit different type strings ("inline", "differential.inline", etc.).
 	if (!fields.path || !diffPHID || fields.line === undefined) {
 		return undefined;
 	}
@@ -271,19 +270,20 @@ function extractInlineLink(
 		path: fields.path,
 		line: fields.line,
 		length: fields.length || 0,
-		isNewFile: flexibleBool(fields.isNewFile),
+		isNewFile: flexibleBool(fields.isNewFile, true),
 		status: statusByPath.get(fields.path) || 'modified',
 	};
 }
 
-function flexibleBool(value: unknown): boolean {
+function flexibleBool(value: unknown, fallback: boolean): boolean {
 	if (typeof value === 'boolean') return value;
 	if (typeof value === 'number') return value !== 0;
 	if (typeof value === 'string') {
 		const lowered = value.toLowerCase();
-		return lowered === '1' || lowered === 'true';
+		if (lowered === '1' || lowered === 'true') return true;
+		if (lowered === '0' || lowered === 'false') return false;
 	}
-	return false;
+	return fallback;
 }
 
 function makeNonce(): string {

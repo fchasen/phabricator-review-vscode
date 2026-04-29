@@ -25,11 +25,15 @@ function inlineDiffPHID(fields: InlineFields): string | undefined {
 }
 
 /**
- * Decode an isNewFile-style flag tolerantly. Phabricator's transaction.search
- * may return it as a real boolean, the integers 0/1, or the strings "0"/"1"
- * — and JS treats `"0"` as truthy, so a naive `?:` mis-routes comments.
+ * Decode an isNewFile-style flag tolerantly with a default.
+ *
+ * Phabricator's `transaction.search` emits this field as a real boolean on
+ * some instances, as the integers 0/1, or the strings "0"/"1". JS treats
+ * "0" as truthy, so a naive `?:` mis-routes comments. When the field is
+ * missing entirely, default to `true` — matches Zilla's behaviour and the
+ * Phabricator UI default of anchoring to the new file.
  */
-function flexibleBool(value: unknown): boolean {
+function flexibleBool(value: unknown, fallback: boolean): boolean {
 	if (typeof value === 'boolean') {
 		return value;
 	}
@@ -38,13 +42,19 @@ function flexibleBool(value: unknown): boolean {
 	}
 	if (typeof value === 'string') {
 		const lowered = value.toLowerCase();
-		return lowered === '1' || lowered === 'true';
+		if (lowered === '1' || lowered === 'true') return true;
+		if (lowered === '0' || lowered === 'false') return false;
 	}
-	return false;
+	return fallback;
 }
 
-function isInlineTransaction(type: string): boolean {
-	return type === 'inline' || type === 'differential.inline' || type === 'differential:inline';
+function isInlineByAnchor(t: Transaction): boolean {
+	const fields = (t.fields as InlineFields) || {};
+	return (
+		!!fields.path &&
+		!!inlineDiffPHID(fields) &&
+		typeof fields.line === 'number'
+	);
 }
 
 const COMPONENT = 'CommentController';
@@ -206,11 +216,17 @@ export class RevisionCommentController extends Disposable {
 
 	private async _refreshThreadsFor(model: RevisionModel): Promise<void> {
 		const transactions = await model.getTransactions();
-		const inlines = transactions.filter((t) => isInlineTransaction(t.type));
+		const inlines = transactions.filter(isInlineByAnchor);
 		Logger.info(
 			`${model.monogram}: ${inlines.length} inline transaction(s) of ${transactions.length} total`,
 			COMPONENT,
 		);
+		if (inlines.length > 0) {
+			Logger.debug(
+				`Sample inline tx (type=${inlines[0].type}): ${JSON.stringify(inlines[0].fields)}`,
+				COMPONENT,
+			);
+		}
 
 		// Resolve every author PHID up front so displayName has data to return.
 		const authorPHIDs = Array.from(new Set(inlines.map((t) => t.authorPHID).filter(Boolean)));
@@ -249,7 +265,7 @@ export class RevisionCommentController extends Disposable {
 				);
 				continue;
 			}
-			const side: 'before' | 'after' = flexibleBool(fields.isNewFile) ? 'after' : 'before';
+			const side: 'before' | 'after' = flexibleBool(fields.isNewFile, true) ? 'after' : 'before';
 			const status = fileStatusByPath.get(fields.path) || 'modified';
 			const uri = phabFileUri(model, diffPHID, fields.path, side, status);
 			const startLine = Math.max(0, fields.line - 1);
