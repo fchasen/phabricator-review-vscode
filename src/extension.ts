@@ -7,6 +7,7 @@ import { RevisionsTreeDataProvider } from './view/revisionsTreeDataProvider';
 import { InMemRevisionFileSystemProvider } from './view/inMemRevisionContentProvider';
 import { PHAB_SCHEME } from './common/uri';
 import { RevisionOverviewPanel } from './phabricator/revisionOverview';
+import { RevisionCommentController } from './view/revisionCommentController';
 
 const SESSION_CONTEXT_KEY = 'phabricator.session';
 
@@ -38,6 +39,9 @@ export async function activate(context: vscode.ExtensionContext) {
 		}),
 	);
 
+	const commentController = new RevisionCommentController(revisionsManager);
+	context.subscriptions.push(commentController);
+
 	const updateContext = (authed: boolean) => {
 		vscode.commands.executeCommand('setContext', SESSION_CONTEXT_KEY, authed ? 'authenticated' : 'unauthenticated');
 	};
@@ -51,10 +55,23 @@ export async function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('phabricator.openRevision', (revisionId: number | string) =>
 			RevisionOverviewPanel.show(context.extensionUri, revisionsManager, revisionId),
 		),
-		vscode.commands.registerCommand('phabricator.openInBrowser', (uri: string | { uri?: string }) => {
-			const target = typeof uri === 'string' ? uri : uri && uri.uri;
+		vscode.commands.registerCommand('phabricator.openInBrowser', (arg: unknown) => {
+			let target: string | undefined;
+			if (typeof arg === 'string') {
+				target = arg;
+			} else if (arg && typeof arg === 'object') {
+				const obj = arg as { browserUri?: string; model?: { uri?: string } };
+				target = obj.browserUri || obj.model?.uri;
+			}
 			if (target) {
 				vscode.env.openExternal(vscode.Uri.parse(target));
+			}
+		}),
+		vscode.commands.registerCommand('phabricator.submitInlineComment', async (thread: vscode.CommentThread) => {
+			try {
+				await commentController.submit(thread);
+			} catch (err) {
+				vscode.window.showErrorMessage(`Failed to submit comment: ${err instanceof Error ? err.message : err}`);
 			}
 		}),
 	);

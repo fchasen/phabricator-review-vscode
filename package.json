@@ -73,6 +73,11 @@
 				"command": "phabricator.openInBrowser",
 				"title": "Open in Browser",
 				"category": "Phabricator"
+			},
+			{
+				"command": "phabricator.submitInlineComment",
+				"title": "Submit",
+				"category": "Phabricator"
 			}
 		],
 		"menus": {
@@ -88,6 +93,19 @@
 					"command": "phabricator.openInBrowser",
 					"when": "view == phabricator:revisions && viewItem == revision",
 					"group": "inline"
+				}
+			],
+			"comments/commentThread/context": [
+				{
+					"command": "phabricator.submitInlineComment",
+					"group": "inline@1",
+					"when": "commentController == mozilla.phabricator"
+				}
+			],
+			"commandPalette": [
+				{
+					"command": "phabricator.submitInlineComment",
+					"when": "false"
 				}
 			]
 		},

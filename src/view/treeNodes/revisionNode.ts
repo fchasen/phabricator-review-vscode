@@ -14,6 +14,7 @@ const STATUS_BADGE: Record<string, string> = {
 
 export class RevisionNode extends vscode.TreeItem {
 	contextValue = 'revision';
+	public readonly browserUri: string;
 
 	constructor(public readonly model: RevisionModel) {
 		super(`${model.monogram}: ${model.title}`, vscode.TreeItemCollapsibleState.Collapsed);
@@ -21,6 +22,7 @@ export class RevisionNode extends vscode.TreeItem {
 		this.description = STATUS_BADGE[model.statusValue] || model.statusName;
 		this.tooltip = `${model.monogram} — ${model.title}\n${model.statusName}`;
 		this.iconPath = new vscode.ThemeIcon('git-pull-request');
+		this.browserUri = model.uri;
 		this.command = {
 			command: 'phabricator.openRevision',
 			title: 'Open Revision',

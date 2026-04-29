@@ -30,6 +30,7 @@ export class RevisionsManager extends Disposable {
 	private readonly _categoryCache = new Map<CategoryKey, RevisionModel[]>();
 	private readonly _byPHID = new Map<string, RevisionModel>();
 	private readonly _byId = new Map<number, RevisionModel>();
+	private _pollTimer: ReturnType<typeof setInterval> | undefined;
 
 	constructor(private readonly _credentials: CredentialStore) {
 		super();
@@ -41,16 +42,37 @@ export class RevisionsManager extends Disposable {
 				this._userResolver = session ? new UserResolver(session.client) : undefined;
 				if (session) {
 					await this._loadProjectMembership(session);
+					this._startPolling();
 				} else {
 					this._projectMembership = [];
+					this._stopPolling();
 				}
 				this._onDidChangeRevisions.fire(undefined);
 			}),
 		);
+		this._register(
+			vscode.window.onDidChangeWindowState((state) => {
+				if (state.focused && this._credentials.session) {
+					this._startPolling();
+				} else {
+					this._stopPolling();
+				}
+			}),
+		);
+		this._register(
+			vscode.workspace.onDidChangeConfiguration((e) => {
+				if (e.affectsConfiguration('phabricator.refreshIntervalSeconds')) {
+					this._restartPolling();
+				}
+			}),
+		);
+		this._register({ dispose: () => this._stopPolling() });
+
 		const existing = this._credentials.session;
 		if (existing) {
 			this._userResolver = new UserResolver(existing.client);
 			this._loadProjectMembership(existing).catch((err) => Logger.warn(err, REVISION_TREE));
+			this._startPolling();
 		}
 	}
 
@@ -180,6 +202,35 @@ export class RevisionsManager extends Disposable {
 		} catch (err) {
 			Logger.warn(`Failed to load project memberships: ${err instanceof Error ? err.message : err}`, REVISION_TREE);
 			this._projectMembership = [];
+		}
+	}
+
+	private _startPolling(): void {
+		this._stopPolling();
+		const seconds = vscode.workspace
+			.getConfiguration('phabricator')
+			.get<number>('refreshIntervalSeconds', 300);
+		if (seconds <= 0) {
+			return;
+		}
+		this._pollTimer = setInterval(() => {
+			if (!vscode.window.state.focused || !this._credentials.session) {
+				return;
+			}
+			this.refresh();
+		}, seconds * 1000);
+	}
+
+	private _stopPolling(): void {
+		if (this._pollTimer) {
+			clearInterval(this._pollTimer);
+			this._pollTimer = undefined;
+		}
+	}
+
+	private _restartPolling(): void {
+		if (this._credentials.session && vscode.window.state.focused) {
+			this._startPolling();
 		}
 	}
 }
