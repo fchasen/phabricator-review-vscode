@@ -12,7 +12,9 @@ interface InlineFields {
 	diffPHID?: string;
 	diff?: { phid?: string; id?: number };
 	path?: string;
-	isNewFile?: boolean;
+	// Phabricator sends booleans across Conduit as JSON booleans on some
+	// instances and as "0"/"1" strings on others; treat as unknown.
+	isNewFile?: unknown;
 	line?: number;
 	length?: number;
 	replyToCommentPHID?: string | null;
@@ -20,6 +22,25 @@ interface InlineFields {
 
 function inlineDiffPHID(fields: InlineFields): string | undefined {
 	return fields.diffPHID || fields.diff?.phid;
+}
+
+/**
+ * Decode an isNewFile-style flag tolerantly. Phabricator's transaction.search
+ * may return it as a real boolean, the integers 0/1, or the strings "0"/"1"
+ * — and JS treats `"0"` as truthy, so a naive `?:` mis-routes comments.
+ */
+function flexibleBool(value: unknown): boolean {
+	if (typeof value === 'boolean') {
+		return value;
+	}
+	if (typeof value === 'number') {
+		return value !== 0;
+	}
+	if (typeof value === 'string') {
+		const lowered = value.toLowerCase();
+		return lowered === '1' || lowered === 'true';
+	}
+	return false;
 }
 
 function isInlineTransaction(type: string): boolean {
@@ -228,7 +249,7 @@ export class RevisionCommentController extends Disposable {
 				);
 				continue;
 			}
-			const side: 'before' | 'after' = fields.isNewFile ? 'after' : 'before';
+			const side: 'before' | 'after' = flexibleBool(fields.isNewFile) ? 'after' : 'before';
 			const status = fileStatusByPath.get(fields.path) || 'modified';
 			const uri = phabFileUri(model, diffPHID, fields.path, side, status);
 			const startLine = Math.max(0, fields.line - 1);

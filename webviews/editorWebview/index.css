@@ -88,37 +88,42 @@ body {
 .file-status-renamed, .file-status-copied { color: var(--vscode-gitDecoration-renamedResourceForeground); }
 
 /* Timeline */
-.timeline ul { display: flex; flex-direction: column; gap: 12px; }
-.timeline li {
+.timeline > ul { display: flex; flex-direction: column; gap: 12px; }
+.timeline > ul > li {
 	padding: 10px 12px;
 	border: 1px solid var(--vscode-panel-border);
 	border-radius: 4px;
 	background: var(--vscode-editor-background);
 }
-.timeline li > header {
+.timeline > ul > li > header {
 	display: flex; gap: 8px; align-items: baseline;
 	font-size: 0.9em; padding-bottom: 6px; opacity: 0.95;
 }
-.timeline li > header strong { font-weight: 600; }
-.timeline li > header em { font-style: normal; opacity: 0.75; }
-.timeline li > header time { margin-left: auto; opacity: 0.55; font-size: 0.85em; }
+.timeline > ul > li > header strong { font-weight: 600; }
+.timeline > ul > li > header em { font-style: normal; opacity: 0.75; }
+.timeline > ul > li > header time { margin-left: auto; opacity: 0.55; font-size: 0.85em; }
 
 /* Lower-importance transactions: render as a single thin row */
-.tx-reviewers-add, .tx-reviewers-remove, .tx-reviewers-update,
-.tx-subscribers-add, .tx-subscribers-remove,
-.tx-projects-add, .tx-projects-remove,
-.tx-title, .tx-summary, .tx-test-plan,
-.tx-update, .tx-bugzilla-bug-id,
-.tx-status, .tx-differential-status, .tx-differential-revision-status {
+.timeline > ul > li.tx-reviewers-add,
+.timeline > ul > li.tx-reviewers-remove,
+.timeline > ul > li.tx-reviewers-update,
+.timeline > ul > li.tx-subscribers-add,
+.timeline > ul > li.tx-subscribers-remove,
+.timeline > ul > li.tx-projects-add,
+.timeline > ul > li.tx-projects-remove,
+.timeline > ul > li.tx-title,
+.timeline > ul > li.tx-summary,
+.timeline > ul > li.tx-test-plan,
+.timeline > ul > li.tx-update,
+.timeline > ul > li.tx-bugzilla-bug-id,
+.timeline > ul > li.tx-status,
+.timeline > ul > li.tx-differential-status,
+.timeline > ul > li.tx-differential-revision-status {
 	background: transparent;
 	border: none;
 	padding: 4px 12px;
 	border-left: 2px solid var(--vscode-panel-border);
 	border-radius: 0;
-}
-.tx-reviewers-add > header time, .tx-reviewers-remove > header time,
-.tx-subscribers-add > header time, .tx-subscribers-remove > header time {
-	font-size: 0.8em;
 }
 
 /* Actions */

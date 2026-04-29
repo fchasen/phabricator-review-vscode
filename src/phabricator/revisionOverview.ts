@@ -258,7 +258,7 @@ function extractInlineLink(
 		diff?: { phid?: string };
 		diffPHID?: string;
 		path?: string;
-		isNewFile?: boolean;
+		isNewFile?: unknown;
 		line?: number;
 		length?: number;
 	};
@@ -271,9 +271,19 @@ function extractInlineLink(
 		path: fields.path,
 		line: fields.line,
 		length: fields.length || 0,
-		isNewFile: !!fields.isNewFile,
+		isNewFile: flexibleBool(fields.isNewFile),
 		status: statusByPath.get(fields.path) || 'modified',
 	};
+}
+
+function flexibleBool(value: unknown): boolean {
+	if (typeof value === 'boolean') return value;
+	if (typeof value === 'number') return value !== 0;
+	if (typeof value === 'string') {
+		const lowered = value.toLowerCase();
+		return lowered === '1' || lowered === 'true';
+	}
+	return false;
 }
 
 function makeNonce(): string {
