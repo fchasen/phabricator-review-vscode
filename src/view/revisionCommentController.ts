@@ -191,6 +191,14 @@ export class RevisionCommentController extends Disposable {
 			COMPONENT,
 		);
 
+		// Resolve every author PHID up front so displayName has data to return.
+		const authorPHIDs = Array.from(new Set(inlines.map((t) => t.authorPHID).filter(Boolean)));
+		if (authorPHIDs.length > 0) {
+			await model.userResolver.resolveMany(authorPHIDs).catch((err) =>
+				Logger.warn(`resolveMany failed: ${err instanceof Error ? err.message : err}`, COMPONENT),
+			);
+		}
+
 		const changesets = await model.getChangesets().catch(() => []);
 		const fileStatusByPath = new Map<string, 'added' | 'removed' | 'modified' | 'renamed' | 'copied'>();
 		for (const cs of changesets) {
