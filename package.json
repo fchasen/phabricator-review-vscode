@@ -78,6 +78,16 @@
 				"command": "phabricator.submitInlineComment",
 				"title": "Submit",
 				"category": "Phabricator"
+			},
+			{
+				"command": "phabricator.submitCommit",
+				"title": "Submit Current Commit",
+				"category": "Phabricator"
+			},
+			{
+				"command": "phabricator.updateRevisionFromCommit",
+				"title": "Update Revision from Commit",
+				"category": "Phabricator"
 			}
 		],
 		"menus": {

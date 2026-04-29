@@ -8,6 +8,7 @@ import { InMemRevisionFileSystemProvider } from './view/inMemRevisionContentProv
 import { PHAB_SCHEME } from './common/uri';
 import { RevisionOverviewPanel } from './phabricator/revisionOverview';
 import { RevisionCommentController } from './view/revisionCommentController';
+import { runSubmitCommitFlow } from './view/createRevisionFlow';
 
 const SESSION_CONTEXT_KEY = 'phabricator.session';
 
@@ -74,6 +75,12 @@ export async function activate(context: vscode.ExtensionContext) {
 				vscode.window.showErrorMessage(`Failed to submit comment: ${err instanceof Error ? err.message : err}`);
 			}
 		}),
+		vscode.commands.registerCommand('phabricator.submitCommit', () =>
+			runSubmitCommitFlow(revisionsManager, context.extensionUri, 'create'),
+		),
+		vscode.commands.registerCommand('phabricator.updateRevisionFromCommit', () =>
+			runSubmitCommitFlow(revisionsManager, context.extensionUri, 'update'),
+		),
 	);
 
 	const restored = await credentials.restore();
