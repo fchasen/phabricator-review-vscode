@@ -57,11 +57,19 @@ export class RevisionModel {
 	}
 
 	public update(revision: Revision): void {
+		const previous = this._revision;
+		const diffChanged = revision.fields.diffPHID !== this._activeDiffPHID;
+		const dateModifiedChanged = revision.fields.dateModified !== previous.fields.dateModified;
 		this._revision = revision;
-		if (revision.fields.diffPHID !== this._activeDiffPHID) {
+		if (diffChanged) {
 			this._activeDiff = undefined;
 			this._activeDiffPHID = revision.fields.diffPHID;
 			this._changesetsCache.clear();
+		}
+		if (!diffChanged && !dateModifiedChanged) {
+			// Nothing observable moved — skip the redundant change event so the
+			// comment controller doesn't re-create all its threads.
+			return;
 		}
 		this._transactions = undefined;
 		this._onDidChange.fire();
