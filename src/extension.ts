@@ -32,8 +32,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	const updateBadge = async () => {
 		try {
-			const { green, red, blue } = await revisionsManager.getAttentionSummary();
-			const total = green + red + blue;
+			const total = await revisionsManager.getAttentionCount();
 			if (total === 0) {
 				treeView.badge = undefined;
 				return;
