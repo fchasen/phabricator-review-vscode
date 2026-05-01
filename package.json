@@ -137,7 +137,8 @@
 		"compile": "tsc -p tsconfig.json --noEmit",
 		"lint": "eslint src webviews",
 		"test:client": "cd phabricator-client && npm test",
-		"test": "npm run test:client"
+		"test:webviews": "node --experimental-strip-types --no-warnings --import ./test/webviews/_register.mjs --test test/webviews/*.test.ts",
+		"test": "npm run test:client && npm run test:webviews"
 	},
 	"dependencies": {
 		"@vscode/codicons": "^0.0.45",
