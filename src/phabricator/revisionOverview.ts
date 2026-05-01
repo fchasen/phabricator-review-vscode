@@ -224,6 +224,28 @@ export class RevisionOverviewPanel extends WebviewBase {
 				vscode.env.openExternal(vscode.Uri.parse(`${base}/book/phabricator/article/remarkup/`));
 				return this._replyMessage(message, true);
 			}
+			case 'searchUsers': {
+				const session = this._manager.session;
+				if (!session) return this._replyMessage(message, []);
+				const args = (message.args || {}) as { query?: string; limit?: number };
+				try {
+					const users = await session.client.searchUsers({ query: args.query || '', limit: args.limit });
+					return this._replyMessage(message, users);
+				} catch (err) {
+					return this._throwError(message, err instanceof Error ? err.message : String(err));
+				}
+			}
+			case 'searchProjects': {
+				const session = this._manager.session;
+				if (!session) return this._replyMessage(message, []);
+				const args = (message.args || {}) as { query?: string; limit?: number };
+				try {
+					const projects = await session.client.searchProjects({ query: args.query || '', limit: args.limit });
+					return this._replyMessage(message, projects);
+				} catch (err) {
+					return this._throwError(message, err instanceof Error ? err.message : String(err));
+				}
+			}
 			default:
 				return this.MESSAGE_UNHANDLED;
 		}

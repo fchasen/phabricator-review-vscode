@@ -295,6 +295,25 @@ body {
 	user-select: none;
 }
 .remarkup-preview { padding: 10px; min-height: 110px; }
+.remarkup-autocomplete {
+	position: absolute; left: 8px; right: 8px; bottom: 100%;
+	margin-bottom: 4px;
+	max-height: 220px; overflow-y: auto;
+	background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+	border: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border));
+	border-radius: 3px;
+	box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+	z-index: 5;
+}
+.remarkup-autocomplete ul { list-style: none; margin: 0; padding: 4px 0; }
+.remarkup-autocomplete-item {
+	padding: 4px 10px; cursor: pointer;
+	display: flex; align-items: baseline; gap: 8px;
+}
+.remarkup-autocomplete-item.is-selected { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
+.remarkup-autocomplete-primary { font-weight: 500; }
+.remarkup-autocomplete-secondary { font-size: 0.85em; opacity: 0.7; }
+.remarkup-autocomplete-empty { padding: 8px 10px; font-size: 0.85em; color: var(--vscode-descriptionForeground); }
 
 .composer-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
 .composer-actions .action {
