@@ -252,11 +252,10 @@ async function pickReviewers(manager: RevisionsManager): Promise<string[] | unde
 	const projectSlugs = tokens.filter((t) => t.startsWith('#')).map((t) => t.slice(1));
 	const out: string[] = [];
 	if (usernames.length > 0) {
-		const results = [];
-		for await (const user of paginatedUserSearch(session.client, usernames)) {
-			results.push(user);
-		}
-		const map = new Map(results.map((u) => [u.fields.username, u.phid]));
+		const result = await session.client.call<{
+			data: Array<{ phid: string; fields: { username: string } }>;
+		}>('user.search', { constraints: { usernames } });
+		const map = new Map(result.data.map((u) => [u.fields.username, u.phid]));
 		for (const username of usernames) {
 			const phid = map.get(username);
 			if (phid) {
@@ -267,11 +266,10 @@ async function pickReviewers(manager: RevisionsManager): Promise<string[] | unde
 		}
 	}
 	if (projectSlugs.length > 0) {
-		const projects = [];
-		for await (const project of paginatedProjectSearch(session.client, projectSlugs)) {
-			projects.push(project);
-		}
-		const map = new Map(projects.map((p) => [p.fields.slug, p.phid]));
+		const result = await session.client.call<{
+			data: Array<{ phid: string; fields: { slug: string | null } }>;
+		}>('project.search', { constraints: { slugs: projectSlugs } });
+		const map = new Map(result.data.map((p) => [p.fields.slug, p.phid]));
 		for (const slug of projectSlugs) {
 			const phid = map.get(slug);
 			if (phid) {
@@ -282,30 +280,6 @@ async function pickReviewers(manager: RevisionsManager): Promise<string[] | unde
 		}
 	}
 	return out;
-}
-
-async function* paginatedUserSearch(
-	client: import('phabricator-client').PhabricatorClient,
-	usernames: string[],
-) {
-	const result = await client.call<{
-		data: Array<{ phid: string; fields: { username: string } }>;
-	}>('user.search', { constraints: { usernames } });
-	for (const u of result.data) {
-		yield u as { phid: string; fields: { username: string } };
-	}
-}
-
-async function* paginatedProjectSearch(
-	client: import('phabricator-client').PhabricatorClient,
-	slugs: string[],
-) {
-	const result = await client.call<{
-		data: Array<{ phid: string; fields: { slug: string | null } }>;
-	}>('project.search', { constraints: { slugs } });
-	for (const p of result.data) {
-		yield p as { phid: string; fields: { slug: string | null } };
-	}
 }
 
 async function ask(label: string, defaultValue: string, multiline = false): Promise<string | undefined> {
