@@ -1,6 +1,7 @@
 import { type KeyboardEvent, useEffect, useMemo, useState } from 'react';
 import { ready, subscribe, request } from '../common/message';
 import { Remarkup } from '../common/remarkup';
+import { RemarkupComposer } from '../common/remarkupComposer';
 import { transactionLabel } from '../common/txLabels';
 
 interface ProjectTag {
@@ -349,11 +350,10 @@ export function App() {
 
 					<section className="composer">
 						<h2>Reply</h2>
-						<textarea
-							value={comment}
-							onChange={(e) => setComment(e.target.value)}
+						<RemarkupComposer
+							onChange={setComment}
+							disabled={busy}
 							placeholder="Leave a comment, then choose an action in the sidebar…"
-							rows={5}
 						/>
 						<div className="composer-actions">
 							<button

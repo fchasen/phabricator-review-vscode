@@ -222,6 +222,80 @@ body {
 	resize: vertical;
 }
 .composer textarea:focus { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
+
+/* Remarkup composer */
+.remarkup-composer {
+	border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+	border-radius: 3px;
+	background: var(--vscode-input-background);
+	display: flex; flex-direction: column;
+}
+.remarkup-composer.is-disabled { opacity: 0.6; pointer-events: none; }
+.remarkup-composer-tabs {
+	display: flex; align-items: center; gap: 4px;
+	padding: 4px 6px;
+	border-bottom: 1px solid var(--vscode-panel-border);
+}
+.remarkup-composer-tabs .tab {
+	background: transparent; color: inherit;
+	border: 1px solid transparent;
+	padding: 3px 10px; font-size: 0.85em;
+	border-radius: 3px; cursor: pointer;
+}
+.remarkup-composer-tabs .tab.is-active {
+	background: var(--vscode-button-secondaryBackground);
+	border-color: var(--vscode-contrastBorder, transparent);
+}
+.remarkup-help { margin-left: auto; font-size: 0.8em; color: var(--vscode-textLink-foreground); text-decoration: none; }
+.remarkup-help:hover { text-decoration: underline; }
+.remarkup-toolbar {
+	display: flex; gap: 2px; flex-wrap: wrap;
+	padding: 4px 6px;
+	border-bottom: 1px solid var(--vscode-panel-border);
+}
+.remarkup-toolbar .tool {
+	min-width: 28px; height: 26px;
+	background: transparent; color: inherit;
+	border: 1px solid transparent; border-radius: 3px;
+	padding: 0 6px; font-size: 0.85em; cursor: pointer;
+}
+.remarkup-toolbar .tool:hover { background: var(--vscode-toolbar-hoverBackground, rgba(127,127,127,0.15)); }
+.remarkup-toolbar .tool.is-active {
+	background: var(--vscode-button-secondaryBackground);
+	border-color: var(--vscode-contrastBorder, transparent);
+}
+.remarkup-composer-body { position: relative; min-height: 110px; }
+.remarkup-editor-host {
+	min-height: 110px;
+	padding: 8px;
+	color: var(--vscode-input-foreground);
+	font: inherit;
+	cursor: text;
+}
+.remarkup-editor-host:focus-within { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
+.remarkup-editor-host .ProseMirror { outline: none; min-height: 90px; }
+.remarkup-editor-host .ProseMirror p { margin: 0 0 8px; }
+.remarkup-editor-host .ProseMirror p:last-child { margin-bottom: 0; }
+.remarkup-editor-host .ProseMirror code {
+	background: var(--vscode-textCodeBlock-background);
+	padding: 1px 4px; border-radius: 3px;
+	font-family: var(--vscode-editor-font-family);
+}
+.remarkup-editor-host .ProseMirror pre {
+	background: var(--vscode-textCodeBlock-background);
+	padding: 8px; border-radius: 3px; overflow-x: auto;
+}
+.remarkup-editor-host .ProseMirror blockquote {
+	border-left: 3px solid var(--vscode-panel-border);
+	padding-left: 8px; margin: 0 0 8px; color: var(--vscode-descriptionForeground);
+}
+.remarkup-placeholder {
+	position: absolute; top: 8px; left: 8px;
+	pointer-events: none; color: var(--vscode-input-placeholderForeground);
+	user-select: none;
+}
+.remarkup-preview { padding: 10px; min-height: 110px; }
+
 .composer-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
 .composer-actions .action {
 	padding: 6px 14px;

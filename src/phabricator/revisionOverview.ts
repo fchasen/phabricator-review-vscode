@@ -208,6 +208,22 @@ export class RevisionOverviewPanel extends WebviewBase {
 					`Abandon ${this._model.monogram}? It will be marked Abandoned. You can reclaim it later from the Phabricator web UI.`,
 					(body) => this._model.abandon(body),
 				);
+			case 'renderRemarkup': {
+				const text = typeof message.args === 'string' ? message.args : '';
+				if (!text.trim()) return this._replyMessage(message, '');
+				try {
+					const [html] = await this._model.renderRemarkup([text]);
+					return this._replyMessage(message, html || '');
+				} catch (err) {
+					return this._throwError(message, err instanceof Error ? err.message : String(err));
+				}
+			}
+			case 'openRemarkupHelp': {
+				const session = this._manager.session;
+				const base = session ? session.client.baseUrl.replace(/\/api\/?$/, '') : 'https://phabricator.services.mozilla.com';
+				vscode.env.openExternal(vscode.Uri.parse(`${base}/book/phabricator/article/remarkup/`));
+				return this._replyMessage(message, true);
+			}
 			default:
 				return this.MESSAGE_UNHANDLED;
 		}
