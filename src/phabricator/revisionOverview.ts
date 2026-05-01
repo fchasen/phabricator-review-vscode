@@ -6,6 +6,7 @@ import { RevisionsManager } from './revisionsManager';
 import { RevisionModel } from './revisionModel';
 import type { Transaction } from './interface';
 import { changesetStatus } from '../view/treeNodes/fileChangeNode';
+import { flexibleBool } from '../common/flexibleBool';
 import Logger from '../common/logger';
 
 interface OverviewPayload {
@@ -547,17 +548,6 @@ function flattenChangesetCorpus(changeset: Changeset): SnippetLine[] {
 		}
 	}
 	return out;
-}
-
-function flexibleBool(value: unknown, fallback: boolean): boolean {
-	if (typeof value === 'boolean') return value;
-	if (typeof value === 'number') return value !== 0;
-	if (typeof value === 'string') {
-		const lowered = value.toLowerCase();
-		if (lowered === '1' || lowered === 'true') return true;
-		if (lowered === '0' || lowered === 'false') return false;
-	}
-	return fallback;
 }
 
 function makeNonce(): string {

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { Disposable } from '../common/lifecycle';
 import { fromPhabUri, PhabUriParams, PHAB_SCHEME } from '../common/uri';
+import { flexibleBool } from '../common/flexibleBool';
 import Logger from '../common/logger';
 import { RevisionsManager } from '../phabricator/revisionsManager';
 import { RevisionModel } from '../phabricator/revisionModel';
@@ -22,30 +23,6 @@ interface InlineFields {
 
 function inlineDiffPHID(fields: InlineFields): string | undefined {
 	return fields.diffPHID || fields.diff?.phid;
-}
-
-/**
- * Decode an isNewFile-style flag tolerantly with a default.
- *
- * Phabricator's `transaction.search` emits this field as a real boolean on
- * some instances, as the integers 0/1, or the strings "0"/"1". JS treats
- * "0" as truthy, so a naive `?:` mis-routes comments. When the field is
- * missing entirely, default to `true` — matches Zilla's behaviour and the
- * Phabricator UI default of anchoring to the new file.
- */
-function flexibleBool(value: unknown, fallback: boolean): boolean {
-	if (typeof value === 'boolean') {
-		return value;
-	}
-	if (typeof value === 'number') {
-		return value !== 0;
-	}
-	if (typeof value === 'string') {
-		const lowered = value.toLowerCase();
-		if (lowered === '1' || lowered === 'true') return true;
-		if (lowered === '0' || lowered === 'false') return false;
-	}
-	return fallback;
 }
 
 function isInlineByAnchor(t: Transaction): boolean {
