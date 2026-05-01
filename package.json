@@ -140,6 +140,7 @@
 		"test": "npm run test:client"
 	},
 	"dependencies": {
+		"@vscode/codicons": "^0.0.45",
 		"markdown-it": "^14.1.1",
 		"phabricator-client": "file:./phabricator-client",
 		"prosemirror-commands": "^1.7.1",

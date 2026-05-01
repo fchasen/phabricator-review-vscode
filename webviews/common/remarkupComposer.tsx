@@ -129,7 +129,7 @@ function buildKeymap() {
 }
 
 interface ToolButton {
-	label: string;
+	icon: string;
 	title: string;
 	command: Command;
 	isActive?: (state: EditorState) => boolean;
@@ -138,46 +138,46 @@ interface ToolButton {
 function buildButtons(): ToolButton[] {
 	return [
 		{
-			label: 'B',
+			icon: 'bold',
 			title: 'Bold (⌘B)',
 			command: toggleMark(remarkupSchema.marks.bold),
 			isActive: (s) => isMarkActive(s, remarkupSchema.marks.bold),
 		},
 		{
-			label: 'I',
+			icon: 'italic',
 			title: 'Italic (⌘I)',
 			command: toggleMark(remarkupSchema.marks.italic),
 			isActive: (s) => isMarkActive(s, remarkupSchema.marks.italic),
 		},
 		{
-			label: '<>',
+			icon: 'code',
 			title: 'Inline code (⌘`)',
 			command: toggleMark(remarkupSchema.marks.code),
 			isActive: (s) => isMarkActive(s, remarkupSchema.marks.code),
 		},
 		{
-			label: 'H',
+			icon: 'heading',
 			title: 'Heading',
 			command: toggleHeading(2),
 			isActive: (s) => s.selection.$from.parent.type.name === 'heading',
 		},
 		{
-			label: '“”',
+			icon: 'quote',
 			title: 'Quote',
 			command: wrapIn(remarkupSchema.nodes.blockquote),
 		},
 		{
-			label: '•',
+			icon: 'list-unordered',
 			title: 'Bulleted list',
 			command: wrapInList(remarkupSchema.nodes.bullet_list),
 		},
 		{
-			label: '1.',
+			icon: 'list-ordered',
 			title: 'Numbered list',
 			command: wrapInList(remarkupSchema.nodes.ordered_list),
 		},
 		{
-			label: '{ }',
+			icon: 'symbol-namespace',
 			title: 'Code block',
 			command: setBlockType(remarkupSchema.nodes.code_block),
 			isActive: (s) => s.selection.$from.parent.type.name === 'code_block',
@@ -186,7 +186,7 @@ function buildButtons(): ToolButton[] {
 }
 
 const linkButton = {
-	label: '↗',
+	icon: 'link',
 	title: 'Link (⌘K)',
 };
 
@@ -341,14 +341,15 @@ export function RemarkupComposer({ onChange, disabled, placeholder }: Props) {
 					const active = editorState && b.isActive ? b.isActive(editorState) : false;
 					return (
 						<button
-							key={b.label}
+							key={b.icon}
 							type="button"
 							className={`tool${active ? ' is-active' : ''}`}
 							title={b.title}
+							aria-label={b.title}
 							onMouseDown={(e) => e.preventDefault()}
 							onClick={() => exec(b.command)}
 						>
-							{b.label}
+							<i className={`codicon codicon-${b.icon}`} />
 						</button>
 					);
 				})}
@@ -356,10 +357,11 @@ export function RemarkupComposer({ onChange, disabled, placeholder }: Props) {
 					type="button"
 					className="tool"
 					title={linkButton.title}
+					aria-label={linkButton.title}
 					onMouseDown={(e) => e.preventDefault()}
 					onClick={() => viewRef.current && promptLink(viewRef.current)}
 				>
-					{linkButton.label}
+					<i className={`codicon codicon-${linkButton.icon}`} />
 				</button>
 			</div>
 			<div className="remarkup-composer-body">

@@ -43,6 +43,10 @@ function makeConfig(opts) {
 					test: /\.css$/,
 					use: ['style-loader', 'css-loader'],
 				},
+				{
+					test: /\.(ttf|woff2?|eot|otf)$/,
+					type: 'asset/resource',
+				},
 			],
 		},
 		plugins: [

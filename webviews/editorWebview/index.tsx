@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import { App } from './app';
 import { ErrorBoundary } from '../common/errorBoundary';
+import '@vscode/codicons/dist/codicon.css';
 import './index.css';
 
 const container = document.getElementById('root');
