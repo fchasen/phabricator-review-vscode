@@ -254,12 +254,8 @@ export function RemarkupComposer({ onChange, disabled, placeholder }: Props) {
 
 	const exec = (cmd: Command) => {
 		const view = viewRef.current;
-		if (!view) {
-			console.log('[exec] no view');
-			return;
-		}
-		const result = cmd(view.state, (tr) => view.dispatch(tr), view);
-		console.log('[exec] command returned', result);
+		if (!view) return;
+		cmd(view.state, (tr) => view.dispatch(tr), view);
 		view.focus();
 	};
 
