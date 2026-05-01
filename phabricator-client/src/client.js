@@ -575,6 +575,44 @@ class PhabricatorClient {
 	}
 
 	/**
+	 * Search users by name fragment for autocomplete. `query` matches usernames
+	 * and real names case-insensitively. Returns up to `limit` results
+	 * (default 8) without paginating.
+	 *
+	 * @param {{ query: string, limit?: number }} args
+	 * @returns {Promise<User[]>}
+	 */
+	async searchUsers(args) {
+		const query = (args.query || '').trim();
+		if (query.length === 0) return [];
+		const limit = Math.min(Math.max(1, args.limit ?? 8), 50);
+		/** @type {{ data: User[], cursor: ConduitCursor }} */
+		const result = await this.call('user.search', {
+			constraints: { nameLike: query, isDisabled: false },
+			limit,
+		});
+		return result.data || [];
+	}
+
+	/**
+	 * Search projects by name fragment for autocomplete.
+	 *
+	 * @param {{ query: string, limit?: number }} args
+	 * @returns {Promise<Project[]>}
+	 */
+	async searchProjects(args) {
+		const query = (args.query || '').trim();
+		if (query.length === 0) return [];
+		const limit = Math.min(Math.max(1, args.limit ?? 8), 50);
+		/** @type {{ data: Project[], cursor: ConduitCursor }} */
+		const result = await this.call('project.search', {
+			constraints: { query, statuses: ['active'] },
+			limit,
+		});
+		return result.data || [];
+	}
+
+	/**
 	 * Find the projects a user is a direct member of (used to expand
 	 * "Needs My Review" so project-tagged reviews show up).
 	 *
