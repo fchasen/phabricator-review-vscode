@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import { PhabricatorClient } from 'phabricator-client';
-import type { Changeset } from 'phabricator-client';
+import { PhabricatorClient } from '../client';
+import type { Changeset } from '../client';
 import type { Revision, Diff, Transaction } from './interface';
 import { synthesizeSideFromCorpus } from '../common/diffHunk';
 import { sanitizeRenderedHtml, rewriteRelativeUrls } from '../common/htmlSanitize';

@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { PhabricatorClient } = require('../src/client');
+const { PhabricatorClient } = require('../../src/client/client');
 const { mockFetch, decodeBody } = require('./_helpers');
 
 test('searchUsers posts user.search with nameLike + isDisabled and a limit', async () => {

@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { execFile } from 'child_process';
 import { randomBytes } from 'crypto';
-import type { Changeset } from 'phabricator-client';
+import type { Changeset } from '../client';
 import { WebviewBase, REVISION_OVERVIEW_VIEW_TYPE, IRequestMessage } from '../common/webview';
 import { RevisionsManager } from './revisionsManager';
 import { RevisionModel } from './revisionModel';

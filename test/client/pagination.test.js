@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { paginate, collect } = require('../src/pagination');
+const { paginate, collect } = require('../../src/client/pagination');
 
 test('paginate: walks two pages and exhausts', async () => {
 	const pages = [

@@ -1,4 +1,4 @@
-import { PhabricatorClient } from 'phabricator-client';
+import { PhabricatorClient } from '../client';
 import type { Project, User } from './interface';
 
 /**

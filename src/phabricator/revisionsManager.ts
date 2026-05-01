@@ -6,7 +6,7 @@ import { UserResolver } from './userResolver';
 import { RevisionModel } from './revisionModel';
 import { LocalGitResolver } from './localGitResolver';
 import type { Revision } from './interface';
-import type { RevisionStatus } from 'phabricator-client';
+import type { RevisionStatus } from '../client';
 
 export type CategoryKey = 'mine' | 'reviewer' | 'subscriber' | 'closed';
 

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { Changeset } from 'phabricator-client';
+import type { Changeset } from '../../client';
 import { RevisionModel } from '../../phabricator/revisionModel';
 import { toPhabUri, PhabUriParams } from '../../common/uri';
 

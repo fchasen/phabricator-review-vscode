@@ -4,7 +4,7 @@ import reactHooks from 'eslint-plugin-react-hooks';
 
 export default [
 	{
-		ignores: ['dist/**', 'out/**', 'node_modules/**', 'phabricator-client/dist-types/**'],
+		ignores: ['dist/**', 'out/**', 'node_modules/**'],
 	},
 	js.configs.recommended,
 	...tseslint.configs.recommended,
@@ -22,6 +22,27 @@ export default [
 			'react-hooks/rules-of-hooks': 'error',
 			'react-hooks/exhaustive-deps': 'warn',
 			'no-empty': ['error', { allowEmptyCatch: true }],
+		},
+	},
+	{
+		files: ['src/client/**/*.js'],
+		languageOptions: {
+			sourceType: 'commonjs',
+			globals: {
+				require: 'readonly',
+				module: 'readonly',
+				exports: 'readonly',
+				__dirname: 'readonly',
+				__filename: 'readonly',
+				process: 'readonly',
+				Buffer: 'readonly',
+				console: 'readonly',
+				globalThis: 'readonly',
+				URL: 'readonly',
+				URLSearchParams: 'readonly',
+				fetch: 'readonly',
+				atob: 'readonly',
+			},
 		},
 	},
 ];

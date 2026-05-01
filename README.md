@@ -43,11 +43,11 @@ npm run build       # production webpack (extension + webview bundles)
 npm run watch       # dev rebuild loop
 npm run compile     # type-check the extension host
 npm run lint        # eslint over src/ and webviews/
-npm test            # phabricator-client + composer/serializer tests
+npm test            # client + composer/serializer tests
 npm run package     # build a .vsix
 ```
 
-The `phabricator-client/` workspace is a pure-JS Conduit API client consumed via a `file:` dependency. It has its own JSDoc types and tests (`node --test`); it's intentionally separable from the extension and could ship as a standalone package.
+The Conduit API client lives in `src/client/` as JSDoc-typed vanilla JS with no VS Code dependencies; tests run via `node --test` in `test/client/`.
 
 ## License
 

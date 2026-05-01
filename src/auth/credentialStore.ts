@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { PhabricatorClient, ConduitError } from 'phabricator-client';
+import { PhabricatorClient, ConduitError } from '../client';
 import { Disposable } from '../common/lifecycle';
 import Logger, { AUTH } from '../common/logger';
 

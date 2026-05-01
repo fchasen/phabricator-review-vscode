@@ -3,8 +3,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { PhabricatorClient } = require('../src/client');
-const { ConduitError } = require('../src/errors');
+const { PhabricatorClient } = require('../../src/client/client');
+const { ConduitError } = require('../../src/client/errors');
 const { mockFetch, decodeBody } = require('./_helpers');
 
 test('whoami: posts form-encoded body with __conduit__ token', async () => {

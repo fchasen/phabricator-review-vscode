@@ -8,15 +8,12 @@
 	},
 	"include": [
 		"src/**/*.ts",
-		"phabricator-client/index.js",
-		"phabricator-client/src/**/*.js"
+		"src/**/*.js"
 	],
 	"exclude": [
 		"node_modules",
 		"out",
 		"dist",
-		"webviews",
-		"phabricator-client/test",
-		"phabricator-client/dist-types"
+		"webviews"
 	]
 }

@@ -6,7 +6,6 @@ webviews/**
 out/**
 test/**
 node_modules/**
-phabricator-client/**
 **/*.ts
 **/*.tsx
 **/*.map

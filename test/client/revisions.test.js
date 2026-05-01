@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { PhabricatorClient } = require('../src/client');
+const { PhabricatorClient } = require('../../src/client/client');
 const { mockFetch, decodeBody } = require('./_helpers');
 
 test('searchRevisions flattens constraints into params', async () => {

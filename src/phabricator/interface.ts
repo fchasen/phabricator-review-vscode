@@ -6,7 +6,7 @@ import type {
 	Project,
 	Transaction,
 	WhoAmI,
-} from 'phabricator-client';
+} from '../client';
 
 export type {
 	Revision,
