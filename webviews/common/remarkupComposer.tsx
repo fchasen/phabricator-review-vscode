@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { EditorState, type Command } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { keymap } from 'prosemirror-keymap';
@@ -17,7 +17,6 @@ interface Props {
 	placeholder?: string;
 }
 
-const PREVIEW_DEBOUNCE_MS = 400;
 const AUTOCOMPLETE_DEBOUNCE_MS = 200;
 const AUTOCOMPLETE_MIN_CHARS = 1;
 
@@ -96,21 +95,13 @@ function isMarkActive(state: EditorState, type: MarkType): boolean {
 	return state.doc.rangeHasMark(from, to, type);
 }
 
-function setHeading(level: number): Command {
-	return setBlockType(remarkupSchema.nodes.heading, { level });
-}
-
-function clearHeading(): Command {
-	return setBlockType(remarkupSchema.nodes.paragraph);
-}
-
 function toggleHeading(level: number): Command {
 	return (state, dispatch, view) => {
 		const block = state.selection.$from.parent;
 		if (block.type.name === 'heading' && block.attrs.level === level) {
-			return clearHeading()(state, dispatch, view);
+			return setBlockType(remarkupSchema.nodes.paragraph)(state, dispatch, view);
 		}
-		return setHeading(level)(state, dispatch, view);
+		return setBlockType(remarkupSchema.nodes.heading, { level })(state, dispatch, view);
 	};
 }
 
@@ -202,12 +193,7 @@ const linkButton = {
 export function RemarkupComposer({ onChange, disabled, placeholder }: Props) {
 	const editorRef = useRef<HTMLDivElement>(null);
 	const viewRef = useRef<EditorView | null>(null);
-	const [tab, setTab] = useState<'write' | 'preview'>('write');
-	const [previewHtml, setPreviewHtml] = useState('');
-	const [previewLoading, setPreviewLoading] = useState(false);
 	const [, forceRender] = useState(0);
-	const previewDebounce = useRef<number | undefined>();
-	const lastPreviewedText = useRef<string>('');
 	const [autocomplete, setAutocomplete] = useState<AutocompleteState | null>(null);
 	const autocompleteRef = useRef<AutocompleteState | null>(null);
 	const queryToken = useRef(0);
@@ -340,43 +326,18 @@ export function RemarkupComposer({ onChange, disabled, placeholder }: Props) {
 		view.focus();
 	};
 
-	const switchTab = (next: 'write' | 'preview') => {
-		if (next === tab) return;
-		setTab(next);
-		if (next === 'preview') {
-			runPreview();
-		}
-	};
-
-	const runPreview = () => {
-		if (!viewRef.current) return;
-		const text = pmDocToRemarkup(viewRef.current.state.doc);
-		if (text === lastPreviewedText.current && previewHtml) return;
-		lastPreviewedText.current = text;
-		if (previewDebounce.current) window.clearTimeout(previewDebounce.current);
-		setPreviewLoading(true);
-		previewDebounce.current = window.setTimeout(async () => {
-			try {
-				const html = await request<string>('renderRemarkup', text);
-				setPreviewHtml(typeof html === 'string' ? html : '');
-			} catch {
-				setPreviewHtml('<p class="muted">Preview unavailable.</p>');
-			} finally {
-				setPreviewLoading(false);
-			}
-		}, PREVIEW_DEBOUNCE_MS);
-	};
-
 	const buttons = buildButtons();
 	const editorState = viewRef.current?.state;
-	const isEmpty = editorState ? editorState.doc.childCount === 1 && editorState.doc.firstChild?.type.name === 'paragraph' && editorState.doc.firstChild.content.size === 0 : true;
-
-	const editorStyle: CSSProperties = tab === 'write' ? {} : { display: 'none' };
+	const isEmpty = editorState
+		? editorState.doc.childCount === 1
+			&& editorState.doc.firstChild?.type.name === 'paragraph'
+			&& editorState.doc.firstChild.content.size === 0
+		: true;
 
 	return (
 		<div className={`remarkup-composer${disabled ? ' is-disabled' : ''}`}>
 			<div className="remarkup-toolbar">
-				{tab === 'write' && buttons.map((b) => {
+				{buttons.map((b) => {
 					const active = editorState && b.isActive ? b.isActive(editorState) : false;
 					return (
 						<button
@@ -391,44 +352,22 @@ export function RemarkupComposer({ onChange, disabled, placeholder }: Props) {
 						</button>
 					);
 				})}
-				{tab === 'write' && (
-					<button
-						type="button"
-						className="tool"
-						title={linkButton.title}
-						onMouseDown={(e) => e.preventDefault()}
-						onClick={() => viewRef.current && promptLink(viewRef.current)}
-					>
-						{linkButton.label}
-					</button>
-				)}
 				<button
 					type="button"
-					className={`tool tool-mode${tab === 'write' ? ' is-active' : ''}`}
-					title="Write"
-					style={{ marginLeft: 'auto' }}
+					className="tool"
+					title={linkButton.title}
 					onMouseDown={(e) => e.preventDefault()}
-					onClick={() => switchTab('write')}
+					onClick={() => viewRef.current && promptLink(viewRef.current)}
 				>
-					✎
-				</button>
-				<button
-					type="button"
-					className={`tool tool-mode${tab === 'preview' ? ' is-active' : ''}`}
-					title="Preview"
-					onMouseDown={(e) => e.preventDefault()}
-					onClick={() => switchTab('preview')}
-				>
-					👁
+					{linkButton.label}
 				</button>
 			</div>
 			<div className="remarkup-composer-body">
-				<div ref={editorRef} className="remarkup-editor-host" style={editorStyle}>
-					{isEmpty && tab === 'write' && placeholder && (
-						<div className="remarkup-placeholder" aria-hidden="true">{placeholder}</div>
-					)}
-				</div>
-				{tab === 'write' && autocomplete && autocomplete.query.length >= AUTOCOMPLETE_MIN_CHARS && (
+				<div ref={editorRef} className="remarkup-editor-host" />
+				{isEmpty && placeholder && (
+					<div className="remarkup-placeholder" aria-hidden="true">{placeholder}</div>
+				)}
+				{autocomplete && autocomplete.query.length >= AUTOCOMPLETE_MIN_CHARS && (
 					<div className="remarkup-autocomplete">
 						{autocomplete.loading && autocomplete.items.length === 0 ? (
 							<div className="remarkup-autocomplete-empty">Searching…</div>
@@ -455,17 +394,6 @@ export function RemarkupComposer({ onChange, disabled, placeholder }: Props) {
 									</li>
 								))}
 							</ul>
-						)}
-					</div>
-				)}
-				{tab === 'preview' && (
-					<div className="remarkup-preview">
-						{previewLoading ? (
-							<p className="muted">Rendering preview…</p>
-						) : previewHtml ? (
-							<div className="comment-body remarkup" dangerouslySetInnerHTML={{ __html: previewHtml }} />
-						) : (
-							<p className="muted">Nothing to preview.</p>
 						)}
 					</div>
 				)}
@@ -500,4 +428,3 @@ async function promptLink(view: EditorView) {
 	view.dispatch(tr);
 	view.focus();
 }
-
