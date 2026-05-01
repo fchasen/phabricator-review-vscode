@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { execFile } from 'child_process';
+import { randomBytes } from 'crypto';
 import type { Changeset } from 'phabricator-client';
 import { WebviewBase, REVISION_OVERVIEW_VIEW_TYPE, IRequestMessage } from '../common/webview';
 import { RevisionsManager } from './revisionsManager';
@@ -551,12 +552,7 @@ function flattenChangesetCorpus(changeset: Changeset): SnippetLine[] {
 }
 
 function makeNonce(): string {
-	let text = '';
-	const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-	for (let i = 0; i < 32; i++) {
-		text += possible.charAt(Math.floor(Math.random() * possible.length));
-	}
-	return text;
+	return randomBytes(16).toString('base64');
 }
 
 interface SearchfoxItem extends vscode.QuickPickItem {
