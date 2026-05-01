@@ -280,16 +280,7 @@ export class RevisionModel {
 		content: string;
 		replyToCommentPHID?: string;
 	}): Promise<{ phid: string }> {
-		const diff = await this.getActiveDiff();
-		if (!diff || diff.phid !== args.diffPHID) {
-			// fall back to looking up by phid
-			const iter = this._client.searchDiffs({ phids: [args.diffPHID] });
-			const result = await iter.next();
-			if (result.done || !result.value) {
-				throw new Error(`Diff ${args.diffPHID} not found`);
-			}
-		}
-		const diffId = (diff && diff.phid === args.diffPHID ? diff.id : 0) || (await this._lookupDiffId(args.diffPHID));
+		const diffId = await this._resolveDiffId(args.diffPHID);
 		const created = await this._client.createInline({
 			diffId,
 			path: args.path,
@@ -349,15 +340,6 @@ export class RevisionModel {
 			this._changesetsCache.clear();
 			this._onDidChange.fire();
 		}
-	}
-
-	private async _lookupDiffId(diffPHID: string): Promise<number> {
-		const iter = this._client.searchDiffs({ phids: [diffPHID] });
-		const result = await iter.next();
-		if (result.done || !result.value) {
-			throw new Error(`Diff ${diffPHID} not found`);
-		}
-		return result.value.id;
 	}
 
 	public dispose(): void {
