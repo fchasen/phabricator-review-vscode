@@ -274,6 +274,12 @@ body {
 	border-left: 3px solid var(--vscode-panel-border);
 	padding-left: 8px; margin: 0 0 8px; color: var(--vscode-descriptionForeground);
 }
+.remarkup-editor-host .ProseMirror ul,
+.remarkup-editor-host .ProseMirror ol { padding-left: 1.4em; margin: 0 0 8px; }
+.remarkup-editor-host .ProseMirror ul { list-style: disc; }
+.remarkup-editor-host .ProseMirror ol { list-style: decimal; }
+.remarkup-editor-host .ProseMirror li { display: list-item; }
+.remarkup-editor-host .ProseMirror li > p { margin: 0; }
 .remarkup-placeholder {
 	position: absolute; top: 8px; left: 8px;
 	pointer-events: none; color: var(--vscode-input-placeholderForeground);
