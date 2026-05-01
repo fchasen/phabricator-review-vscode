@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { execFile } from 'child_process';
 import type { Changeset } from 'phabricator-client';
 import { WebviewBase, REVISION_OVERVIEW_VIEW_TYPE, IRequestMessage } from '../common/webview';
 import { RevisionsManager } from './revisionsManager';
@@ -242,6 +243,14 @@ export class RevisionOverviewPanel extends WebviewBase {
 				} catch (err) {
 					return this._throwError(message, err instanceof Error ? err.message : String(err));
 				}
+			}
+			case 'searchfoxPickPath': {
+				const result = await runSearchfoxPathPicker();
+				return this._replyMessage(message, result);
+			}
+			case 'searchfoxPickSymbol': {
+				const result = await runSearchfoxSymbolPicker();
+				return this._replyMessage(message, result);
 			}
 			default:
 				return this.MESSAGE_UNHANDLED;
@@ -555,4 +564,149 @@ function makeNonce(): string {
 		text += possible.charAt(Math.floor(Math.random() * possible.length));
 	}
 	return text;
+}
+
+interface SearchfoxItem extends vscode.QuickPickItem {
+	url: string;
+	insertText: string;
+}
+
+const SEARCHFOX_BASE = 'https://searchfox.org/firefox-main/source/';
+const SEARCHFOX_DEBOUNCE_MS = 250;
+const SEARCHFOX_LIMIT = 50;
+
+function basenameOf(path: string): string {
+	const slash = path.lastIndexOf('/');
+	return slash >= 0 ? path.slice(slash + 1) : path;
+}
+
+function parsePathOutput(stdout: string): SearchfoxItem[] {
+	const items: SearchfoxItem[] = [];
+	for (const raw of stdout.split('\n')) {
+		const line = raw.trim();
+		if (!line || line.startsWith('Total matches:')) continue;
+		const path = line;
+		const file = basenameOf(path);
+		items.push({
+			label: file,
+			description: path,
+			url: `${SEARCHFOX_BASE}${path}`,
+			insertText: file,
+			alwaysShow: true,
+		});
+	}
+	return items;
+}
+
+function parseSymbolOutput(stdout: string, symbol: string): SearchfoxItem[] {
+	const items: SearchfoxItem[] = [];
+	for (const raw of stdout.split('\n')) {
+		const line = raw.trimEnd();
+		if (!line || line.startsWith('Total matches:')) continue;
+		const m = line.match(/^([^:]+):(\d+):\s?(.*)$/);
+		if (!m) continue;
+		const [, path, lineNo, snippet] = m;
+		items.push({
+			label: `${basenameOf(path)}:${lineNo}`,
+			description: path,
+			detail: snippet,
+			url: `${SEARCHFOX_BASE}${path}#${lineNo}`,
+			insertText: symbol,
+			alwaysShow: true,
+		});
+	}
+	return items;
+}
+
+interface SearchfoxRunResult {
+	stdout: string;
+	errorMessage?: string;
+	errorCode?: string | number | null;
+}
+
+function runSearchfoxCli(args: string[]): Promise<SearchfoxRunResult> {
+	return new Promise((resolve) => {
+		execFile('searchfox-cli', args, { timeout: 15000, maxBuffer: 4 * 1024 * 1024 }, (err, stdout) => {
+			resolve({
+				stdout: stdout || '',
+				errorMessage: err?.message,
+				errorCode: err?.code,
+			});
+		});
+	});
+}
+
+type Mode = 'path' | 'symbol';
+
+function runSearchfoxLivePicker(mode: Mode): Promise<{ url: string; text: string } | null> {
+	return new Promise((resolve) => {
+		const qp = vscode.window.createQuickPick<SearchfoxItem>();
+		qp.placeholder = mode === 'path'
+			? 'Find file in Searchfox'
+			: 'Find symbol in Searchfox';
+		qp.matchOnDescription = true;
+		qp.matchOnDetail = true;
+
+		let token = 0;
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		let settled = false;
+		const settle = (value: { url: string; text: string } | null) => {
+			if (settled) return;
+			settled = true;
+			resolve(value);
+		};
+
+		const search = (value: string) => {
+			const cur = ++token;
+			const term = value.trim();
+			if (!term) {
+				qp.items = [];
+				qp.busy = false;
+				return;
+			}
+			qp.busy = true;
+			const args = mode === 'path'
+				? ['-p', term, '-l', String(SEARCHFOX_LIMIT)]
+				: ['-q', term, '-l', String(SEARCHFOX_LIMIT)];
+			void runSearchfoxCli(args).then(({ stdout, errorMessage, errorCode }) => {
+				if (cur !== token) return;
+				qp.busy = false;
+				if (errorMessage) {
+					if (errorCode === 'ENOENT') {
+						vscode.window.showErrorMessage('searchfox-cli not found on PATH. Install it with `cargo install searchfox-cli`.');
+						qp.hide();
+						return;
+					}
+					Logger.warn(`searchfox-cli failed: ${errorMessage}`, 'Searchfox');
+					qp.items = [];
+					return;
+				}
+				qp.items = mode === 'path' ? parsePathOutput(stdout) : parseSymbolOutput(stdout, term);
+			});
+		};
+
+		qp.onDidChangeValue((v) => {
+			if (timer) clearTimeout(timer);
+			timer = setTimeout(() => search(v), SEARCHFOX_DEBOUNCE_MS);
+		});
+		qp.onDidAccept(() => {
+			const sel = qp.selectedItems[0];
+			if (sel) settle({ url: sel.url, text: sel.insertText });
+			qp.hide();
+		});
+		qp.onDidHide(() => {
+			if (timer) clearTimeout(timer);
+			settle(null);
+			qp.dispose();
+		});
+		qp.show();
+	});
+}
+
+function runSearchfoxPathPicker(): Promise<{ url: string; text: string } | null> {
+	return runSearchfoxLivePicker('path');
+}
+
+function runSearchfoxSymbolPicker(): Promise<{ url: string; text: string } | null> {
+	return runSearchfoxLivePicker('symbol');
 }

@@ -202,6 +202,12 @@ export function RemarkupComposer({ onChange, disabled, placeholder }: Props) {
 					promptLink(v);
 					return true;
 				}
+				const isCmdF = (ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === 'f';
+				if (isCmdF) {
+					ev.preventDefault();
+					promptSearchfoxPath(v);
+					return true;
+				}
 				return false;
 			},
 			attributes: {
@@ -294,6 +300,26 @@ export function RemarkupComposer({ onChange, disabled, placeholder }: Props) {
 				>
 					<i className={`codicon codicon-${linkToolbarItem.icon}`} />
 				</button>
+				<button
+					type="button"
+					className="tool tool-trailing"
+					title="Insert Searchfox file link (⌘F)"
+					aria-label="Insert Searchfox file link"
+					onMouseDown={(e) => e.preventDefault()}
+					onClick={() => viewRef.current && promptSearchfoxPath(viewRef.current)}
+				>
+					<i className="codicon codicon-search" />
+				</button>
+				<button
+					type="button"
+					className="tool"
+					title="Insert Searchfox symbol link"
+					aria-label="Insert Searchfox symbol link"
+					onMouseDown={(e) => e.preventDefault()}
+					onClick={() => viewRef.current && promptSearchfoxSymbol(viewRef.current)}
+				>
+					<i className="codicon codicon-symbol-method" />
+				</button>
 			</div>
 			<div className="remarkup-composer-body">
 				<div ref={editorRef} className="remarkup-editor-host" />
@@ -348,5 +374,21 @@ async function promptLink(view: EditorView) {
 		? (await request<string | null>('promptInput', { prompt: 'Link text', value: href })) || href
 		: undefined;
 	applyLink(href, display)(view.state, (tr) => view.dispatch(tr), view);
+	view.focus();
+}
+
+async function promptSearchfoxPath(view: EditorView) {
+	const result = await request<{ url: string; text: string } | null>('searchfoxPickPath');
+	if (!result || typeof result !== 'object' || !result.url) return;
+	const { empty } = view.state.selection;
+	applyLink(result.url, empty ? result.text : undefined)(view.state, (tr) => view.dispatch(tr), view);
+	view.focus();
+}
+
+async function promptSearchfoxSymbol(view: EditorView) {
+	const result = await request<{ url: string; text: string } | null>('searchfoxPickSymbol');
+	if (!result || typeof result !== 'object' || !result.url) return;
+	const { empty } = view.state.selection;
+	applyLink(result.url, empty ? result.text : undefined)(view.state, (tr) => view.dispatch(tr), view);
 	view.focus();
 }

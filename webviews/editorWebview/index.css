@@ -252,6 +252,7 @@ body {
 	border: 1px solid transparent; border-radius: 3px;
 	padding: 0 6px; cursor: pointer;
 }
+.remarkup-toolbar .tool.tool-trailing { margin-left: auto; }
 .remarkup-toolbar .tool .codicon { font-size: 16px; line-height: 1; }
 .remarkup-toolbar .tool:hover { background: var(--vscode-toolbar-hoverBackground, rgba(127,127,127,0.15)); }
 .remarkup-toolbar .tool.is-active {
