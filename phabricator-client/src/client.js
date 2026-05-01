@@ -59,6 +59,43 @@ class PhabricatorClient {
 		return this.call('user.whoami');
 	}
 
+	// ---------------------------------------------------------------- remarkup
+
+	/**
+	 * Render Remarkup source to HTML using Phabricator's own renderer via the
+	 * `remarkup.process` Conduit endpoint. Accepts a list of bodies and returns
+	 * a parallel list of HTML strings. Returns an empty array if `contents` is
+	 * empty (no Conduit call made).
+	 *
+	 * Note: `context` is the renderer **engine** name (e.g. `phriction-document`,
+	 * `differential-revision`), not a PHID. Phabricator returns
+	 * `ERR-INVALID_ENGINE` for unknown engine names. Defaults to
+	 * `phriction-document`, which is the most permissive engine available on
+	 * most installs.
+	 *
+	 * @param {string[]} contents
+	 * @param {{ context?: string }} [opts]
+	 * @returns {Promise<string[]>}
+	 */
+	async processRemarkup(contents, opts) {
+		if (!Array.isArray(contents) || contents.length === 0) {
+			return [];
+		}
+		const args = {
+			context: (opts && opts.context) || 'phriction-document',
+			contents,
+		};
+		/** @type {any} */
+		const result = await this.call('remarkup.process', args);
+		const list = Array.isArray(result) ? result : [];
+		return list.map((entry) => {
+			if (entry && typeof entry.content === 'string') {
+				return entry.content;
+			}
+			return typeof entry === 'string' ? entry : '';
+		});
+	}
+
 	// ---------------------------------------------------------------- revisions
 
 	/**
