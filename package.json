@@ -8,7 +8,7 @@
 	"icon": "resources/icons/marketplace.png",
 	"engines": {
 		"vscode": "^1.90.0",
-		"node": ">=18"
+		"node": ">=22"
 	},
 	"categories": [
 		"SCM Providers"
