@@ -4,8 +4,10 @@
 
 import * as vscode from 'vscode';
 import { Disposable } from './lifecycle';
+import Logger from './logger';
 
 export const REVISION_OVERVIEW_VIEW_TYPE = 'RevisionOverview';
+const READY_TIMEOUT_MS = 30_000;
 
 export interface IRequestMessage<T> {
 	req: string;
@@ -31,9 +33,18 @@ export abstract class WebviewBase extends Disposable {
 		super();
 		this._waitForReady = new Promise((resolve) => {
 			const disposable = this._onIsReady.event(() => {
+				clearTimeout(timer);
 				disposable.dispose();
 				resolve();
 			});
+			// Resolve anyway after the timeout so a broken webview can't wedge
+			// the host in awaits forever; subsequent posts will simply no-op
+			// against a webview that never finished mounting.
+			const timer = setTimeout(() => {
+				Logger.warn(`Webview did not signal ready within ${READY_TIMEOUT_MS}ms; releasing post queue.`);
+				disposable.dispose();
+				resolve();
+			}, READY_TIMEOUT_MS);
 		});
 	}
 
