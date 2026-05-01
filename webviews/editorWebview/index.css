@@ -18,6 +18,8 @@ body {
 
 .status { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; font-size: 0.95em; opacity: 0.95; }
 .status .author { opacity: 0.8; }
+.status .monogram a { color: var(--vscode-textLink-foreground); text-decoration: none; }
+.status .monogram a:hover { text-decoration: underline; }
 .status .bug a { color: var(--vscode-textLink-foreground); text-decoration: none; }
 .status .bug a:hover { text-decoration: underline; }
 

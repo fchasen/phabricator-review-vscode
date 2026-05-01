@@ -292,14 +292,14 @@ export function App() {
 			<div className="grid">
 				<main className="main-col">
 					<header className="overview-header">
-						<h1>
-							<a href={payload.uri} target="_blank" rel="noreferrer">
-								{payload.monogram}
-							</a>
-							: {payload.title}
-						</h1>
+						<h1>{payload.title}</h1>
 						<div className="status">
 							<span className={`badge status-${payload.statusValue}`}>{payload.statusName}</span>
+							<span className="monogram">
+								<a href={payload.uri} target="_blank" rel="noreferrer">
+									{payload.monogram}
+								</a>
+							</span>
 							<span className="author">by {payload.authorName}</span>
 							{payload.bug && (
 								<span className="bug">
