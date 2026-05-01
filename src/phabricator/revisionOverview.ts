@@ -134,6 +134,9 @@ export class RevisionOverviewPanel extends WebviewBase {
 			case 'openInBrowser':
 				vscode.env.openExternal(vscode.Uri.parse(this._model.uri));
 				return this._replyMessage(message, true);
+			case 'openLando':
+				vscode.env.openExternal(vscode.Uri.parse(`https://lando.moz.tools/${this._model.id}/`));
+				return this._replyMessage(message, true);
 			case 'comment':
 				try {
 					await this._model.comment(String(message.args));

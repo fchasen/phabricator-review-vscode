@@ -375,14 +375,24 @@ export function App() {
 				</main>
 
 				<aside className="sidebar">
-					<button
-						className="open-in-browser"
-						onClick={() => request('openInBrowser')}
-						title={`Open ${payload.monogram} on Phabricator`}
-					>
-						<span className="codicon-link">↗</span>
-						<span>Open in browser</span>
-					</button>
+					<div className="external-links">
+						<button
+							className="open-in-browser"
+							onClick={() => request('openInBrowser')}
+							title={`Open ${payload.monogram} on Phabricator`}
+						>
+							<i className="codicon codicon-link-external" />
+							<span>Open in Phabricator</span>
+						</button>
+						<button
+							className="open-in-browser"
+							onClick={() => request('openLando')}
+							title={`Open ${payload.monogram} in Lando`}
+						>
+							<i className="codicon codicon-link-external" />
+							<span>View in Lando</span>
+						</button>
+					</div>
 
 					<section className="actions">
 						<h3>Review</h3>
