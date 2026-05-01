@@ -92,7 +92,6 @@ export function applyLink(href: string, displayIfEmpty?: string): Command {
 
 export interface ToolbarItem {
 	icon: string;
-	label: string;
 	title: string;
 	command: Command;
 	isActive?: (state: EditorState) => boolean;
@@ -102,55 +101,47 @@ export function buildToolbarItems(): ToolbarItem[] {
 	return [
 		{
 			icon: 'bold',
-			label: 'Bold',
 			title: 'Bold (⌘B)',
 			command: toggleMark(remarkupSchema.marks.bold),
 			isActive: (s) => isMarkActive(s, remarkupSchema.marks.bold),
 		},
 		{
 			icon: 'italic',
-			label: 'Italic',
 			title: 'Italic (⌘I)',
 			command: toggleMark(remarkupSchema.marks.italic),
 			isActive: (s) => isMarkActive(s, remarkupSchema.marks.italic),
 		},
 		{
 			icon: 'code',
-			label: 'Code',
 			title: 'Inline code (⌘`)',
 			command: toggleMark(remarkupSchema.marks.code),
 			isActive: (s) => isMarkActive(s, remarkupSchema.marks.code),
 		},
 		{
 			icon: 'text-size',
-			label: 'Heading',
 			title: 'Heading',
 			command: toggleHeading(2),
 			isActive: (s) => isHeadingActive(s, 2),
 		},
 		{
 			icon: 'quote',
-			label: 'Quote',
 			title: 'Quote',
 			command: wrapIn(remarkupSchema.nodes.blockquote),
 		},
 		{
 			icon: 'list-unordered',
-			label: 'Bullets',
 			title: 'Bulleted list',
 			command: toggleList(remarkupSchema.nodes.bullet_list),
 			isActive: (s) => isListActive(s, remarkupSchema.nodes.bullet_list),
 		},
 		{
 			icon: 'list-ordered',
-			label: 'Numbered',
 			title: 'Numbered list',
 			command: toggleList(remarkupSchema.nodes.ordered_list),
 			isActive: (s) => isListActive(s, remarkupSchema.nodes.ordered_list),
 		},
 		{
 			icon: 'symbol-namespace',
-			label: 'Code block',
 			title: 'Code block',
 			command: setBlockType(remarkupSchema.nodes.code_block),
 			isActive: isCodeBlockActive,
@@ -158,4 +149,4 @@ export function buildToolbarItems(): ToolbarItem[] {
 	];
 }
 
-export const linkToolbarItem = { icon: 'link', label: 'Link', title: 'Link (⌘K)' };
+export const linkToolbarItem = { icon: 'link', title: 'Link (⌘K)' };

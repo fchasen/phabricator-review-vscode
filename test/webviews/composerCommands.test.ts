@@ -252,8 +252,7 @@ test('buildToolbarItems exposes the expected eight buttons', () => {
 	]);
 	for (const item of items) {
 		assert.equal(typeof item.command, 'function', `${item.icon} should have a command`);
-		assert.equal(typeof item.title, 'string');
-		assert.ok(item.label && item.label.length > 0, `${item.icon} should have a non-empty label`);
+		assert.ok(item.title && item.title.length > 0, `${item.icon} should have a non-empty title`);
 	}
 });
 
@@ -262,8 +261,8 @@ test('buildToolbarItems items report isActive correctly inside a heading', () =>
 	const state = makeState(docOf([heading]));
 	const items = buildToolbarItems();
 
-	const headingItem = items.find((i) => i.label === 'Heading')!;
-	const bulletItem = items.find((i) => i.label === 'Bullets')!;
+	const headingItem = items.find((i) => i.icon === 'text-size')!;
+	const bulletItem = items.find((i) => i.icon === 'list-unordered')!;
 	assert.equal(headingItem.isActive!(state), true);
 	assert.equal(bulletItem.isActive!(state), false);
 });

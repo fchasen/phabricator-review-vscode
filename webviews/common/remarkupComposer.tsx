@@ -276,7 +276,6 @@ export function RemarkupComposer({ onChange, disabled, placeholder }: Props) {
 							onClick={() => exec(b.command)}
 						>
 							<i className={`codicon codicon-${b.icon}`} />
-							<span className="tool-label">{b.label}</span>
 						</button>
 					);
 				})}
@@ -289,7 +288,6 @@ export function RemarkupComposer({ onChange, disabled, placeholder }: Props) {
 					onClick={() => viewRef.current && promptLink(viewRef.current)}
 				>
 					<i className={`codicon codicon-${linkToolbarItem.icon}`} />
-					<span className="tool-label">{linkToolbarItem.label}</span>
 				</button>
 			</div>
 			<div className="remarkup-composer-body">
