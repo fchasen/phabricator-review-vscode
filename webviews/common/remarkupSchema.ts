@@ -43,7 +43,7 @@ const nodes: { [name: string]: NodeSpec } = {
 		defining: true,
 		marks: '',
 		parseDOM: [{ tag: 'pre', preserveWhitespace: 'full' }],
-		toDOM: (node) => ['pre', { 'data-lang': node.attrs.lang || null }, ['code', 0]],
+		toDOM: (node) => ['pre', { 'data-lang': node.attrs.lang || null, spellcheck: 'false' }, ['code', 0]],
 	},
 
 	bullet_list: {
@@ -96,7 +96,7 @@ const marks: { [name: string]: MarkSpec } = {
 	},
 	code: {
 		parseDOM: [{ tag: 'code' }],
-		toDOM: () => ['code', 0],
+		toDOM: () => ['code', { spellcheck: 'false' }, 0],
 	},
 	link: {
 		attrs: { href: { default: '' }, title: { default: null } },

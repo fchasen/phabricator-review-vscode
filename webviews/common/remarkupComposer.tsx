@@ -204,7 +204,12 @@ export function RemarkupComposer({ onChange, disabled, placeholder }: Props) {
 				}
 				return false;
 			},
-			attributes: { class: 'remarkup-composer-editor' },
+			attributes: {
+				class: 'remarkup-composer-editor',
+				spellcheck: 'true',
+				autocorrect: 'on',
+				autocapitalize: 'sentences',
+			},
 		});
 		viewRef.current = view;
 		return () => {
