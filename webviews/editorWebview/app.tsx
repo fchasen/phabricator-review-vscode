@@ -112,7 +112,7 @@ function basename(path: string): string {
 	return idx === -1 ? path : path.slice(idx + 1);
 }
 
-function InlineSnippet({ inline }: { inline: InlineAnchor }) {
+function InlineSnippet({ inline, canEdit }: { inline: InlineAnchor; canEdit: boolean }) {
 	const [collapsed, setCollapsed] = useState(false);
 	const [done, setDone] = useState(inline.isDone);
 	const [pending, setPending] = useState(false);
@@ -144,7 +144,7 @@ function InlineSnippet({ inline }: { inline: InlineAnchor }) {
 		}
 	};
 	const hasSnippet = inline.snippet.length > 0;
-	const canMarkDone = !!inline.commentPHID;
+	const hasComment = !!inline.commentPHID;
 	return (
 		<div className={`inline-snippet${done ? ' inline-snippet-done' : ''}`}>
 			<div className="inline-snippet-head">
@@ -167,7 +167,7 @@ function InlineSnippet({ inline }: { inline: InlineAnchor }) {
 					{basename(inline.path)}
 				</button>
 				{inline.isOutdated && <span className="inline-snippet-badge">Outdated</span>}
-				{canMarkDone && (
+				{hasComment && canEdit && (
 					<label className="inline-snippet-done-toggle" title={done ? 'Mark as not done' : 'Mark as done'}>
 						<input
 							type="checkbox"
@@ -177,6 +177,15 @@ function InlineSnippet({ inline }: { inline: InlineAnchor }) {
 						/>
 						<span>Done</span>
 					</label>
+				)}
+				{hasComment && !canEdit && (
+					<span
+						className={`inline-snippet-done-icon${done ? ' is-done' : ''}`}
+						title={done ? 'Marked done' : 'Not done'}
+						aria-label={done ? 'Marked done' : 'Not done'}
+					>
+						{done ? '✓' : '○'}
+					</span>
 				)}
 			</div>
 			{hasSnippet && !collapsed && (
@@ -337,7 +346,7 @@ export function App() {
 												<em>{transactionLabel(tx.type)}</em>
 												<time>{new Date(tx.dateCreated * 1000).toLocaleString()}</time>
 											</header>
-											{tx.inline && <InlineSnippet inline={tx.inline} />}
+											{tx.inline && <InlineSnippet inline={tx.inline} canEdit={payload.isAuthor} />}
 											{tx.comments.map((c) => (
 												<Remarkup key={c.phid} html={c.contentHtml} source={c.content} />
 											))}

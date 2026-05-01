@@ -454,6 +454,14 @@ body {
 .inline-snippet-done-toggle:hover { opacity: 1; }
 .inline-snippet-done-toggle input { accent-color: var(--vscode-charts-green); margin: 0; }
 .inline-snippet-done .inline-snippet-done-toggle { color: var(--vscode-charts-green); }
+.inline-snippet-done-icon {
+	margin-left: auto;
+	display: inline-flex; align-items: center; justify-content: center;
+	width: 18px; height: 18px;
+	font-size: 0.95em;
+	color: var(--vscode-descriptionForeground);
+}
+.inline-snippet-done-icon.is-done { color: var(--vscode-charts-green); }
 .inline-snippet-done .inline-snippet-body { opacity: 0.55; }
 .inline-snippet-body {
 	cursor: pointer;
