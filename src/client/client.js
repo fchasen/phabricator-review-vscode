@@ -553,6 +553,62 @@ class PhabricatorClient {
 	}
 
 	/**
+	 * Resolve users by exact username. Returns a `Map` keyed by the matched
+	 * username so callers can detect typos / unknown handles.
+	 *
+	 * @param {string[]} usernames
+	 * @returns {Promise<Map<string, User>>}
+	 */
+	async resolveUsersByUsername(usernames) {
+		const out = /** @type {Map<string, User>} */ (new Map());
+		if (usernames.length === 0) {
+			return out;
+		}
+		const iter = paginate(async (after) => {
+			/** @type {{ data: User[], cursor: ConduitCursor }} */
+			const result = await this.call('user.search', {
+				constraints: { usernames: Array.from(new Set(usernames)) },
+				after,
+			});
+			return result;
+		});
+		for await (const user of iter) {
+			if (user.fields?.username) {
+				out.set(user.fields.username, user);
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * Resolve projects by exact slug. Returns a `Map` keyed by slug; projects
+	 * without a slug are omitted (callers see them as unknown).
+	 *
+	 * @param {string[]} slugs
+	 * @returns {Promise<Map<string, Project>>}
+	 */
+	async resolveProjectsBySlug(slugs) {
+		const out = /** @type {Map<string, Project>} */ (new Map());
+		if (slugs.length === 0) {
+			return out;
+		}
+		const iter = paginate(async (after) => {
+			/** @type {{ data: Project[], cursor: ConduitCursor }} */
+			const result = await this.call('project.search', {
+				constraints: { slugs: Array.from(new Set(slugs)) },
+				after,
+			});
+			return result;
+		});
+		for await (const project of iter) {
+			if (project.fields?.slug) {
+				out.set(project.fields.slug, project);
+			}
+		}
+		return out;
+	}
+
+	/**
 	 * @param {string[]} phids
 	 * @returns {Promise<Map<string, Project>>}
 	 */

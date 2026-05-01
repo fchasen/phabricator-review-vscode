@@ -252,28 +252,22 @@ async function pickReviewers(manager: RevisionsManager): Promise<string[] | unde
 	const projectSlugs = tokens.filter((t) => t.startsWith('#')).map((t) => t.slice(1));
 	const out: string[] = [];
 	if (usernames.length > 0) {
-		const result = await session.client.call<{
-			data: Array<{ phid: string; fields: { username: string } }>;
-		}>('user.search', { constraints: { usernames } });
-		const map = new Map(result.data.map((u) => [u.fields.username, u.phid]));
+		const found = await session.client.resolveUsersByUsername(usernames);
 		for (const username of usernames) {
-			const phid = map.get(username);
-			if (phid) {
-				out.push(phid);
+			const user = found.get(username);
+			if (user) {
+				out.push(user.phid);
 			} else {
 				vscode.window.showWarningMessage(`Unknown user: ${username}`);
 			}
 		}
 	}
 	if (projectSlugs.length > 0) {
-		const result = await session.client.call<{
-			data: Array<{ phid: string; fields: { slug: string | null } }>;
-		}>('project.search', { constraints: { slugs: projectSlugs } });
-		const map = new Map(result.data.map((p) => [p.fields.slug, p.phid]));
+		const found = await session.client.resolveProjectsBySlug(projectSlugs);
 		for (const slug of projectSlugs) {
-			const phid = map.get(slug);
-			if (phid) {
-				out.push(phid);
+			const project = found.get(slug);
+			if (project) {
+				out.push(project.phid);
 			} else {
 				vscode.window.showWarningMessage(`Unknown project: #${slug}`);
 			}

@@ -143,21 +143,12 @@ async function editProjectsFlow(manager: import('./phabricator/revisionsManager'
 	const resolvedPHIDs: string[] = [];
 	if (tokens.length > 0) {
 		try {
-			const result = await session.client.call<{ data: Array<{ phid: string; fields: { slug: string | null; name: string } }> }>(
-				'project.search',
-				{ constraints: { slugs: tokens } },
-			);
-			const found = new Map<string, string>();
-			for (const project of result.data) {
-				if (project.fields.slug) {
-					found.set(project.fields.slug, project.phid);
-				}
-			}
+			const found = await session.client.resolveProjectsBySlug(tokens);
 			const unknown: string[] = [];
 			for (const slug of tokens) {
-				const phid = found.get(slug);
-				if (phid) {
-					resolvedPHIDs.push(phid);
+				const project = found.get(slug);
+				if (project) {
+					resolvedPHIDs.push(project.phid);
 				} else {
 					unknown.push(slug);
 				}
