@@ -1,7 +1,7 @@
 {
-	"name": "vscode-phab",
+	"name": "phabricator-review",
 	"displayName": "Phabricator Review",
-	"description": "Review and create Phabricator revisions on Mozilla's instance.",
+	"description": "Review and create revisions on Mozilla's Phabricator instance.",
 	"version": "0.0.1",
 	"publisher": "fchasen",
 	"license": "MPL-2.0",
@@ -130,7 +130,7 @@
 				},
 				"phabricator.refreshIntervalSeconds": {
 					"type": "number",
-					"default": 300,
+					"default": 900,
 					"minimum": 30,
 					"description": "How often to poll Phabricator for revision updates while the editor is focused."
 				},

@@ -22,7 +22,7 @@ The token is stored in VS Code's `SecretStorage`. Sign out via the **Phabricator
 ## Settings
 
 - `phabricator.baseUrl` — Conduit API endpoint, ending with `/api/`. Defaults to Mozilla's instance.
-- `phabricator.refreshIntervalSeconds` — how often to poll for updates while the editor is focused. Default `300`.
+- `phabricator.refreshIntervalSeconds` — how often to poll for updates while the editor is focused. Default `900` (15 minutes).
 - `phabricator.landoBaseUrl` — base URL for the **View in Lando** action. Default `https://lando.moz.tools/`.
 - `phabricator.searchfoxRepo` — Searchfox repo identifier used for inserted links. Default `firefox-main`. Other options include `mozilla-central`, `comm-central`, `autoland`, etc.
 

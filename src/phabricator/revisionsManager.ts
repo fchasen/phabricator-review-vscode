@@ -235,7 +235,7 @@ export class RevisionsManager extends Disposable {
 		this._stopPolling();
 		const seconds = vscode.workspace
 			.getConfiguration('phabricator')
-			.get<number>('refreshIntervalSeconds', 300);
+			.get<number>('refreshIntervalSeconds', 900);
 		if (seconds <= 0) {
 			return;
 		}
