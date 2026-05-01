@@ -132,13 +132,12 @@ function blockToRemarkup(state: State, node: Node, isFirstSibling: boolean): voi
 			if (top?.kind === 'ordered') top.index++;
 			const indent = ' '.repeat(marker.length);
 			let first = true;
-			let bodyOut = '';
 			const wrap: State = { out: '', prefix: '', listStack: state.listStack };
 			node.forEach((child) => {
 				blockToRemarkup(wrap, child, first);
 				first = false;
 			});
-			bodyOut = wrap.out;
+			const bodyOut = wrap.out;
 			const lines = bodyOut.split('\n');
 			for (let i = 0; i < lines.length; i++) {
 				const line = lines[i];

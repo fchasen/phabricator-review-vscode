@@ -76,7 +76,7 @@ function detectTrigger(state: EditorState): { kind: AutocompleteKind; triggerPos
 			const before = i === 0 ? '' : text[i - 1];
 			if (i !== 0 && !/\s/.test(before)) return null;
 			const query = text.slice(i + 1);
-			if (!/^[A-Za-z0-9._\-]*$/.test(query)) return null;
+			if (!/^[A-Za-z0-9._-]*$/.test(query)) return null;
 			return {
 				kind: ch === '@' ? 'user' : 'project',
 				triggerPos: $from.start() + i,

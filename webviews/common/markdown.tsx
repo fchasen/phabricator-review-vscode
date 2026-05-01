@@ -18,12 +18,11 @@ export interface MarkdownProps {
 }
 
 export function Markdown({ source, className }: MarkdownProps) {
-	let html = '';
+	let html: string;
 	try {
 		html = getMarkdown().render(source || '');
 	} catch (err) {
 		console.error('markdown render failed', err);
-		// Fall back to escaped plain text so we never wipe the panel.
 		const escaped = (source || '')
 			.replace(/&/g, '&amp;')
 			.replace(/</g, '&lt;')

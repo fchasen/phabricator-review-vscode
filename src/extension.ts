@@ -141,7 +141,7 @@ async function editProjectsFlow(manager: import('./phabricator/revisionsManager'
 		.map((t) => t.trim().replace(/^#/, ''))
 		.filter((t) => t.length > 0);
 
-	let resolvedPHIDs: string[] = [];
+	const resolvedPHIDs: string[] = [];
 	if (tokens.length > 0) {
 		try {
 			const result = await session.client.call<{ data: Array<{ phid: string; fields: { slug: string | null; name: string } }> }>(

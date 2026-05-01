@@ -32,7 +32,7 @@ export class DiffHunk {
 	) {}
 }
 
-export const DIFF_HUNK_HEADER = /^@@ \-(\d+)(,(\d+))?( \+(\d+)(,(\d+)?)?)? @@/;
+export const DIFF_HUNK_HEADER = /^@@ -(\d+)(,(\d+))?( \+(\d+)(,(\d+)?)?)? @@/;
 
 export function getDiffChangeType(text: string): DiffChangeType {
 	const c = text[0];
@@ -79,7 +79,6 @@ export function* parseDiffHunk(diffHunkPatch: string): IterableIterator<DiffHunk
 		if (match) {
 			if (diffHunk) {
 				yield diffHunk;
-				diffHunk = undefined;
 			}
 			positionInHunk = 0;
 			const oldStart = Number(match[1]);

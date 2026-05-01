@@ -6,3 +6,4 @@ dist/
 phabricator-client/dist-types/
 phabricator-client/node_modules/
 .DS_Store
+CLAUDE.md

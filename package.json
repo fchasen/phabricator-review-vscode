@@ -1,9 +1,9 @@
 {
 	"name": "vscode-phab",
-	"displayName": "Mozilla Phabricator",
+	"displayName": "Phabricator Review",
 	"description": "Review and create Phabricator revisions on Mozilla's instance.",
 	"version": "0.0.1",
-	"publisher": "mozilla",
+	"publisher": "fchasen@gmail.com",
 	"license": "MPL-2.0",
 	"engines": {
 		"vscode": "^1.90.0",
@@ -155,6 +155,7 @@
 		"react-dom": "^18.3.1"
 	},
 	"devDependencies": {
+		"@eslint/js": "^10.0.1",
 		"@types/markdown-it": "^14.1.2",
 		"@types/node": "^20.12.0",
 		"@types/react": "^18.3.0",
@@ -162,9 +163,12 @@
 		"@types/vscode": "^1.90.0",
 		"css-loader": "^7.1.4",
 		"esbuild-loader": "^4.2.0",
+		"eslint": "^10.3.0",
+		"eslint-plugin-react-hooks": "^7.1.1",
 		"fork-ts-checker-webpack-plugin": "^9.0.2",
 		"style-loader": "^4.0.0",
 		"typescript": "^5.4.0",
+		"typescript-eslint": "^8.59.1",
 		"webpack": "^5.94.0",
 		"webpack-cli": "^5.1.4"
 	}
