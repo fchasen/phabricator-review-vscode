@@ -2,16 +2,6 @@ import * as vscode from 'vscode';
 import { RevisionModel } from '../../phabricator/revisionModel';
 import { FileChangeNode } from './fileChangeNode';
 
-const STATUS_BADGE: Record<string, string> = {
-	'needs-review': 'Needs Review',
-	'needs-revision': 'Needs Revision',
-	'changes-planned': 'Changes Planned',
-	'accepted': 'Accepted',
-	'published': 'Closed',
-	'abandoned': 'Abandoned',
-	'draft': 'Draft',
-};
-
 interface IconSpec {
 	codicon: string;
 	color?: string;
@@ -41,8 +31,7 @@ export class RevisionNode extends vscode.TreeItem {
 	constructor(public readonly model: RevisionModel) {
 		super(model.title, vscode.TreeItemCollapsibleState.Collapsed);
 		this.id = `revision:${model.phid}`;
-		const statusLabel = STATUS_BADGE[model.statusValue] || model.statusName;
-		this.description = `${model.monogram} ${statusLabel}`;
+		this.description = model.monogram;
 		this.tooltip = `${model.monogram} — ${model.title}\n${model.statusName}`;
 		this.iconPath = iconForStatus(model.statusValue);
 		this.browserUri = model.uri;

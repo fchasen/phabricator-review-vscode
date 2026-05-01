@@ -27,9 +27,24 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	const treeProvider = new RevisionsTreeDataProvider(revisionsManager);
 	context.subscriptions.push(treeProvider);
-	context.subscriptions.push(
-		vscode.window.registerTreeDataProvider('phabricator:revisions', treeProvider),
-	);
+	const treeView = vscode.window.createTreeView('phabricator:revisions', { treeDataProvider: treeProvider });
+	context.subscriptions.push(treeView);
+
+	const updateBadge = async () => {
+		try {
+			const { green, red, blue } = await revisionsManager.getAttentionSummary();
+			const total = green + red + blue;
+			if (total === 0) {
+				treeView.badge = undefined;
+				return;
+			}
+			treeView.badge = { value: total, tooltip: `${total} item${total === 1 ? '' : 's'} need your attention` };
+		} catch (err) {
+			Logger.warn(`Failed to compute attention badge: ${err instanceof Error ? err.message : err}`);
+		}
+	};
+	context.subscriptions.push(revisionsManager.onDidChangeRevisions(() => { void updateBadge(); }));
+	void updateBadge();
 
 	const fsProvider = new InMemRevisionFileSystemProvider(revisionsManager);
 	context.subscriptions.push(fsProvider);

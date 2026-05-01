@@ -130,6 +130,30 @@ export class RevisionsManager extends Disposable {
 		return this._byPHID.get(phid);
 	}
 
+	public async getAttentionSummary(): Promise<{ green: number; red: number; blue: number }> {
+		const session = this._credentials.session;
+		if (!session) return { green: 0, red: 0, blue: 0 };
+		const [mine, reviewer] = await Promise.all([
+			this.getRevisionsForCategory('mine'),
+			this.getRevisionsForCategory('reviewer'),
+		]);
+		let green = 0;
+		let red = 0;
+		let blue = 0;
+		for (const m of mine) {
+			if (m.authorPHID !== session.userPHID) continue;
+			if (m.statusValue === 'accepted') green++;
+			else if (m.statusValue === 'needs-revision') red++;
+		}
+		for (const m of reviewer) {
+			if (m.statusValue !== 'needs-review') continue;
+			const me = m.reviewers.find((r) => r.reviewerPHID === session.userPHID);
+			if (!me) continue;
+			if (me.status === 'added' || me.status === 'accepted-prior') blue++;
+		}
+		return { green, red, blue };
+	}
+
 	public async getOrFetchRevision(idOrPHID: number | string): Promise<RevisionModel | undefined> {
 		const fromCache =
 			typeof idOrPHID === 'number'

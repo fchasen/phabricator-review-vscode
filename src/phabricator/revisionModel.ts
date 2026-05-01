@@ -58,6 +58,14 @@ export class RevisionModel {
 		return `D${this._revision.id}`;
 	}
 
+	public get authorPHID(): string {
+		return this._revision.fields.authorPHID;
+	}
+
+	public get reviewers(): ReadonlyArray<{ reviewerPHID: string; status: string; isBlocking: boolean }> {
+		return this._revision.attachments.reviewers?.reviewers ?? [];
+	}
+
 	public update(revision: Revision): void {
 		const previous = this._revision;
 		const diffChanged = revision.fields.diffPHID !== this._activeDiffPHID;
