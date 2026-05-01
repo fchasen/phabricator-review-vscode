@@ -3,12 +3,12 @@ import { EditorState, type Command } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { keymap } from 'prosemirror-keymap';
 import { history, undo, redo } from 'prosemirror-history';
-import { baseKeymap, toggleMark, wrapIn, setBlockType, chainCommands, exitCode } from 'prosemirror-commands';
+import { baseKeymap, toggleMark, wrapIn, chainCommands, exitCode } from 'prosemirror-commands';
 import { splitListItem, liftListItem, sinkListItem } from 'prosemirror-schema-list';
-import type { MarkType, NodeType, Node as PmNode } from 'prosemirror-model';
 
 import { remarkupSchema } from './remarkupSchema';
 import { pmDocToRemarkup } from './remarkupSerialize';
+import { applyLink, buildToolbarItems, linkToolbarItem } from './composerCommands';
 import { request } from './message';
 
 interface Props {
@@ -89,75 +89,6 @@ function detectTrigger(state: EditorState): { kind: AutocompleteKind; triggerPos
 	return null;
 }
 
-function isMarkActive(state: EditorState, type: MarkType): boolean {
-	const { from, $from, to, empty } = state.selection;
-	if (empty) return !!type.isInSet(state.storedMarks || $from.marks());
-	return state.doc.rangeHasMark(from, to, type);
-}
-
-function toggleHeading(level: number): Command {
-	return (state, dispatch, view) => {
-		const block = state.selection.$from.parent;
-		if (block.type.name === 'heading' && block.attrs.level === level) {
-			return setBlockType(remarkupSchema.nodes.paragraph)(state, dispatch, view);
-		}
-		return setBlockType(remarkupSchema.nodes.heading, { level })(state, dispatch, view);
-	};
-}
-
-function findListAncestor($pos: import('prosemirror-model').ResolvedPos): { depth: number; node: PmNode } | null {
-	for (let d = $pos.depth; d > 0; d--) {
-		const n = $pos.node(d);
-		if (n.type === remarkupSchema.nodes.bullet_list || n.type === remarkupSchema.nodes.ordered_list) {
-			return { depth: d, node: n };
-		}
-	}
-	return null;
-}
-
-function toggleList(listType: NodeType): Command {
-	return (state, dispatch) => {
-		console.log('[toggleList] called', listType.name, 'sel:', state.selection.from, '-', state.selection.to);
-		const { $from, $to } = state.selection;
-		const range = $from.blockRange($to);
-		console.log('[toggleList] range:', range
-			? `start=${range.start} end=${range.end} depth=${range.depth} parent=${range.parent.type.name} startIdx=${range.startIndex} endIdx=${range.endIndex}`
-			: 'NULL');
-		if (!range) return false;
-		const ancestor = findListAncestor($from);
-		console.log('[toggleList] ancestor:', ancestor ? ancestor.node.type.name : 'none');
-
-		if (ancestor && ancestor.node.type === listType) {
-			const ok = liftListItem(remarkupSchema.nodes.list_item)(state, dispatch);
-			console.log('[toggleList] liftListItem →', ok);
-			return ok;
-		}
-
-		if (!dispatch) return true;
-
-		try {
-			const items: PmNode[] = [];
-			for (let i = range.startIndex; i < range.endIndex; i++) {
-				const child = range.parent.child(i);
-				console.log('[toggleList] child', i, child.type.name, 'size=', child.nodeSize);
-				const inner = child.type === remarkupSchema.nodes.paragraph
-					? child
-					: remarkupSchema.nodes.paragraph.create(null, child.content);
-				items.push(remarkupSchema.nodes.list_item.create(null, inner));
-			}
-			const list = listType.create(null, items);
-			console.log('[toggleList] built list', list.toString());
-			const tr = state.tr.replaceWith(range.start, range.end, list);
-			console.log('[toggleList] dispatching, tr.docChanged=', tr.docChanged);
-			dispatch(tr.scrollIntoView());
-			return true;
-		} catch (err) {
-			console.error('[toggleList] threw', err);
-			return false;
-		}
-	};
-}
-
 function buildKeymap() {
 	const km: Record<string, Command> = {
 		'Mod-z': undo,
@@ -180,76 +111,6 @@ function buildKeymap() {
 	km['Shift-Enter'] = ctrlEnter;
 	return km;
 }
-
-interface ToolButton {
-	icon: string;
-	title: string;
-	command: Command;
-	isActive?: (state: EditorState) => boolean;
-}
-
-function buildButtons(): ToolButton[] {
-	return [
-		{
-			icon: 'bold',
-			title: 'Bold (⌘B)',
-			command: toggleMark(remarkupSchema.marks.bold),
-			isActive: (s) => isMarkActive(s, remarkupSchema.marks.bold),
-		},
-		{
-			icon: 'italic',
-			title: 'Italic (⌘I)',
-			command: toggleMark(remarkupSchema.marks.italic),
-			isActive: (s) => isMarkActive(s, remarkupSchema.marks.italic),
-		},
-		{
-			icon: 'code',
-			title: 'Inline code (⌘`)',
-			command: toggleMark(remarkupSchema.marks.code),
-			isActive: (s) => isMarkActive(s, remarkupSchema.marks.code),
-		},
-		{
-			icon: 'heading',
-			title: 'Heading',
-			command: toggleHeading(2),
-			isActive: (s) => s.selection.$from.parent.type.name === 'heading',
-		},
-		{
-			icon: 'quote',
-			title: 'Quote',
-			command: wrapIn(remarkupSchema.nodes.blockquote),
-		},
-		{
-			icon: 'list-unordered',
-			title: 'Bulleted list',
-			command: toggleList(remarkupSchema.nodes.bullet_list),
-			isActive: (s) => {
-				const a = findListAncestor(s.selection.$from);
-				return !!a && a.node.type === remarkupSchema.nodes.bullet_list;
-			},
-		},
-		{
-			icon: 'list-ordered',
-			title: 'Numbered list',
-			command: toggleList(remarkupSchema.nodes.ordered_list),
-			isActive: (s) => {
-				const a = findListAncestor(s.selection.$from);
-				return !!a && a.node.type === remarkupSchema.nodes.ordered_list;
-			},
-		},
-		{
-			icon: 'symbol-namespace',
-			title: 'Code block',
-			command: setBlockType(remarkupSchema.nodes.code_block),
-			isActive: (s) => s.selection.$from.parent.type.name === 'code_block',
-		},
-	];
-}
-
-const linkButton = {
-	icon: 'link',
-	title: 'Link (⌘K)',
-};
 
 export function RemarkupComposer({ onChange, disabled, placeholder }: Props) {
 	const editorRef = useRef<HTMLDivElement>(null);
@@ -391,7 +252,7 @@ export function RemarkupComposer({ onChange, disabled, placeholder }: Props) {
 		view.focus();
 	};
 
-	const buttons = buildButtons();
+	const buttons = buildToolbarItems();
 	const editorState = viewRef.current?.state;
 	const isEmpty = editorState
 		? editorState.doc.childCount === 1
@@ -415,18 +276,20 @@ export function RemarkupComposer({ onChange, disabled, placeholder }: Props) {
 							onClick={() => exec(b.command)}
 						>
 							<i className={`codicon codicon-${b.icon}`} />
+							<span className="tool-label">{b.label}</span>
 						</button>
 					);
 				})}
 				<button
 					type="button"
 					className="tool"
-					title={linkButton.title}
-					aria-label={linkButton.title}
+					title={linkToolbarItem.title}
+					aria-label={linkToolbarItem.title}
 					onMouseDown={(e) => e.preventDefault()}
 					onClick={() => viewRef.current && promptLink(viewRef.current)}
 				>
-					<i className={`codicon codicon-${linkButton.icon}`} />
+					<i className={`codicon codicon-${linkToolbarItem.icon}`} />
+					<span className="tool-label">{linkToolbarItem.label}</span>
 				</button>
 			</div>
 			<div className="remarkup-composer-body">
@@ -470,8 +333,7 @@ export function RemarkupComposer({ onChange, disabled, placeholder }: Props) {
 }
 
 async function promptLink(view: EditorView) {
-	const initial = view.state.selection;
-	const { from, to, empty } = initial;
+	const { from, to, empty } = view.state.selection;
 	const selectedText = empty ? '' : view.state.doc.textBetween(from, to, ' ');
 	const href = await request<string | null>('promptInput', {
 		prompt: selectedText ? `Link target for "${selectedText}"` : 'Link target URL',
@@ -479,19 +341,9 @@ async function promptLink(view: EditorView) {
 		placeHolder: 'https://example.com',
 	});
 	if (!href || typeof href !== 'string') return;
-	const linkMark = remarkupSchema.marks.link.create({ href });
-	const state = view.state;
-	let tr = state.tr;
-	if (empty) {
-		const display = await request<string | null>('promptInput', {
-			prompt: 'Link text',
-			value: href,
-		}) || href;
-		const node = state.schema.text(display, [linkMark]);
-		tr = tr.replaceRangeWith(from, to, node);
-	} else {
-		tr = tr.addMark(from, to, linkMark);
-	}
-	view.dispatch(tr);
+	const display = empty
+		? (await request<string | null>('promptInput', { prompt: 'Link text', value: href })) || href
+		: undefined;
+	applyLink(href, display)(view.state, (tr) => view.dispatch(tr), view);
 	view.focus();
 }
