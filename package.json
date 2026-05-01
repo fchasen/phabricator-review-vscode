@@ -1,5 +1,5 @@
 {
-	"name": "phabricator-review",
+	"name": "phabricator-review-vscode",
 	"displayName": "Phabricator Review",
 	"description": "Review and create revisions on Mozilla's Phabricator instance.",
 	"version": "0.0.1",
