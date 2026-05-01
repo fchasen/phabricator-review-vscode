@@ -70,11 +70,6 @@
 				"category": "Phabricator"
 			},
 			{
-				"command": "phabricator.openInBrowser",
-				"title": "Open in Browser",
-				"category": "Phabricator"
-			},
-			{
 				"command": "phabricator.submitInlineComment",
 				"title": "Submit",
 				"category": "Phabricator"
@@ -101,13 +96,6 @@
 					"command": "phabricator.refresh",
 					"when": "view == phabricator:revisions",
 					"group": "navigation"
-				}
-			],
-			"view/item/context": [
-				{
-					"command": "phabricator.openInBrowser",
-					"when": "view == phabricator:revisions && viewItem == revision",
-					"group": "inline"
 				}
 			],
 			"comments/commentThread/context": [

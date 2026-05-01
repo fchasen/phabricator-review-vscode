@@ -56,18 +56,6 @@ export async function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('phabricator.openRevision', (revisionId: number | string) =>
 			RevisionOverviewPanel.show(context.extensionUri, revisionsManager, revisionId),
 		),
-		vscode.commands.registerCommand('phabricator.openInBrowser', (arg: unknown) => {
-			let target: string | undefined;
-			if (typeof arg === 'string') {
-				target = arg;
-			} else if (arg && typeof arg === 'object') {
-				const obj = arg as { browserUri?: string; model?: { uri?: string } };
-				target = obj.browserUri || obj.model?.uri;
-			}
-			if (target) {
-				vscode.env.openExternal(vscode.Uri.parse(target));
-			}
-		}),
 		vscode.commands.registerCommand('phabricator.submitInlineComment', async (thread: vscode.CommentThread) => {
 			try {
 				await commentController.submit(thread);

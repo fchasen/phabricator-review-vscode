@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import type { Changeset } from 'phabricator-client';
 import { WebviewBase, REVISION_OVERVIEW_VIEW_TYPE, IRequestMessage } from '../common/webview';
 import { RevisionsManager } from './revisionsManager';
 import { RevisionModel } from './revisionModel';
@@ -54,7 +55,20 @@ interface InlineLink {
 	length: number;
 	isNewFile: boolean;
 	status: 'added' | 'removed' | 'modified' | 'renamed' | 'copied';
+	isOutdated: boolean;
+	isDone: boolean;
+	commentPHID: string | null;
+	snippet: SnippetLine[];
 }
+
+interface SnippetLine {
+	type: 'context' | 'add' | 'remove';
+	oldLine: number | null;
+	newLine: number | null;
+	text: string;
+}
+
+const SNIPPET_CONTEXT_LINES = 3;
 
 /**
  * Tracks open revision panels keyed by revision PHID. Mirrors the reference's
@@ -139,6 +153,18 @@ export class RevisionOverviewPanel extends WebviewBase {
 				} catch (err) {
 					return this._throwError(message, err instanceof Error ? err.message : String(err));
 				}
+			case 'markInlineDone': {
+				const args = message.args as { commentPHID?: string; done?: boolean } | undefined;
+				if (!args?.commentPHID) {
+					return this._replyMessage(message, false);
+				}
+				try {
+					await this._model.markInlineDone([args.commentPHID], args.done !== false);
+					return this._replyMessage(message, true);
+				} catch (err) {
+					return this._throwError(message, err instanceof Error ? err.message : String(err));
+				}
+			}
 			case 'revealInlineComment': {
 				const inline = message.args as InlineLink | undefined;
 				if (!inline) {
@@ -222,11 +248,20 @@ export class RevisionOverviewPanel extends WebviewBase {
 		const transactions = await this._model.getTransactions();
 		const changesets = await this._model.getChangesets().catch(() => []);
 		const statusByPath = new Map<string, ReturnType<typeof changesetStatus>>();
+		const changesetByPath = new Map<string, Changeset>();
 		for (const cs of changesets) {
 			const status = changesetStatus(cs.type);
-			if (cs.currentPath) statusByPath.set(cs.currentPath, status);
-			if (cs.oldPath) statusByPath.set(cs.oldPath, status);
+			if (cs.currentPath) {
+				statusByPath.set(cs.currentPath, status);
+				changesetByPath.set(cs.currentPath, cs);
+			}
+			if (cs.oldPath) {
+				statusByPath.set(cs.oldPath, status);
+				if (!changesetByPath.has(cs.oldPath)) changesetByPath.set(cs.oldPath, cs);
+			}
 		}
+		const flatByChangeset = new Map<number, SnippetLine[]>();
+		const activeDiffPHID = revision.fields.diffPHID;
 		const resolver = this._manager.userResolver;
 
 		const phidsToResolve = new Set<string>();
@@ -286,7 +321,7 @@ export class RevisionOverviewPanel extends WebviewBase {
 				comments: (t.comments || [])
 					.filter((c) => !c.removed)
 					.map((c) => ({ phid: c.phid, content: c.content.raw, dateCreated: c.dateCreated })),
-				inline: extractInlineLink(t, statusByPath),
+				inline: extractInlineLink(t, statusByPath, changesetByPath, flatByChangeset, activeDiffPHID),
 			})),
 		};
 	}
@@ -316,6 +351,9 @@ export class RevisionOverviewPanel extends WebviewBase {
 function extractInlineLink(
 	t: Transaction,
 	statusByPath: Map<string, ReturnType<typeof changesetStatus>>,
+	changesetByPath: Map<string, Changeset>,
+	flatByChangeset: Map<number, SnippetLine[]>,
+	activeDiffPHID: string | null | undefined,
 ): InlineLink | undefined {
 	const fields = t.fields as Record<string, unknown> & {
 		diff?: { phid?: string };
@@ -331,14 +369,94 @@ function extractInlineLink(
 	if (!fields.path || !diffPHID || fields.line === undefined) {
 		return undefined;
 	}
+	const isNewFile = flexibleBool(fields.isNewFile, true);
+	const line = fields.line;
+	const length = fields.length || 0;
+	const isOutdated = !!activeDiffPHID && diffPHID !== activeDiffPHID;
+	const snippet = isOutdated ? [] : buildInlineSnippet(
+		changesetByPath.get(fields.path),
+		flatByChangeset,
+		{ line, length, isNewFile },
+	);
+	const isDone = flexibleBool((fields as { isDone?: unknown }).isDone, false);
+	const headComment = (t.comments || []).find((c) => !c.removed);
 	return {
 		diffPHID,
 		path: fields.path,
-		line: fields.line,
-		length: fields.length || 0,
-		isNewFile: flexibleBool(fields.isNewFile, true),
+		line,
+		length,
+		isNewFile,
 		status: statusByPath.get(fields.path) || 'modified',
+		isOutdated,
+		isDone,
+		commentPHID: headComment ? headComment.phid : null,
+		snippet,
 	};
+}
+
+function buildInlineSnippet(
+	changeset: Changeset | undefined,
+	flatByChangeset: Map<number, SnippetLine[]>,
+	anchor: { line: number; length: number; isNewFile: boolean },
+): SnippetLine[] {
+	if (!changeset || changeset.hunks.length === 0) return [];
+	let flat = flatByChangeset.get(changeset.id);
+	if (!flat) {
+		flat = flattenChangesetCorpus(changeset);
+		flatByChangeset.set(changeset.id, flat);
+	}
+	if (flat.length === 0) return [];
+	const lineNumOf = (entry: SnippetLine) => (anchor.isNewFile ? entry.newLine : entry.oldLine);
+	const skipType = anchor.isNewFile ? 'remove' : 'add';
+	let anchorIdx = -1;
+	for (let i = 0; i < flat.length; i++) {
+		const entry = flat[i];
+		if (entry.type === skipType) continue;
+		if (lineNumOf(entry) === anchor.line) {
+			anchorIdx = i;
+			break;
+		}
+	}
+	if (anchorIdx === -1) return [];
+	let endIdx = anchorIdx;
+	const spanEnd = anchor.line + Math.max(0, anchor.length);
+	for (let i = anchorIdx + 1; i < flat.length; i++) {
+		const entry = flat[i];
+		const num = lineNumOf(entry);
+		if (num !== null && num > spanEnd) break;
+		endIdx = i;
+	}
+	const start = Math.max(0, anchorIdx - SNIPPET_CONTEXT_LINES);
+	const end = Math.min(flat.length, endIdx + SNIPPET_CONTEXT_LINES + 1);
+	return flat.slice(start, end);
+}
+
+function flattenChangesetCorpus(changeset: Changeset): SnippetLine[] {
+	const out: SnippetLine[] = [];
+	for (const hunk of changeset.hunks) {
+		let oldLine = hunk.oldOffset;
+		let newLine = hunk.newOffset;
+		const lines = hunk.corpus.split('\n');
+		for (let i = 0; i < lines.length; i++) {
+			const raw = lines[i];
+			if (raw.length === 0 && i === lines.length - 1) break;
+			const prefix = raw[0];
+			if (prefix === '\\' || prefix === undefined) continue;
+			const text = raw.slice(1);
+			if (prefix === '+') {
+				out.push({ type: 'add', oldLine: null, newLine, text });
+				newLine++;
+			} else if (prefix === '-') {
+				out.push({ type: 'remove', oldLine, newLine: null, text });
+				oldLine++;
+			} else {
+				out.push({ type: 'context', oldLine, newLine, text });
+				oldLine++;
+				newLine++;
+			}
+		}
+	}
+	return out;
 }
 
 function flexibleBool(value: unknown, fallback: boolean): boolean {

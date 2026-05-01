@@ -201,6 +201,7 @@
  * @property {number} line
  * @property {number} length
  * @property {string|null} replyToCommentPHID
+ * @property {boolean} [isDone]
  */
 
 /**

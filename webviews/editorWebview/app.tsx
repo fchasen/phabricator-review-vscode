@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { type KeyboardEvent, useEffect, useMemo, useState } from 'react';
 import { ready, subscribe, request } from '../common/message';
 import { Markdown } from '../common/markdown';
 import { transactionLabel } from '../common/txLabels';
@@ -8,20 +8,34 @@ interface ProjectTag {
 	displayName: string;
 }
 
+interface SnippetLine {
+	type: 'context' | 'add' | 'remove';
+	oldLine: number | null;
+	newLine: number | null;
+	text: string;
+}
+
+interface InlineAnchor {
+	diffPHID: string;
+	path: string;
+	line: number;
+	length: number;
+	isNewFile: boolean;
+	status: 'added' | 'removed' | 'modified' | 'renamed' | 'copied';
+	isOutdated: boolean;
+	isDone: boolean;
+	commentPHID: string | null;
+	snippet: SnippetLine[];
+}
+
 interface TimelineEntry {
 	id: string;
 	type: string;
+	authorPHID: string;
 	authorName: string;
 	dateCreated: number;
 	comments: Array<{ phid: string; content: string }>;
-	inline?: {
-		diffPHID: string;
-		path: string;
-		line: number;
-		length: number;
-		isNewFile: boolean;
-		status: 'added' | 'removed' | 'modified' | 'renamed' | 'copied';
-	};
+	inline?: InlineAnchor;
 }
 
 interface OverviewPayload {
@@ -48,10 +62,154 @@ const REVIEWER_STATE_ICON: Record<string, string> = {
 	'accepted': '✓',
 	'accepted-prior': '✓',
 	'rejected': '✗',
-	'blocking': '⚠',
+	'blocking': '⛔',
 	'resigned': '↩',
 	'added': '○',
 };
+
+const AVATAR_PALETTE = [
+	'#3b82f6', '#8b5cf6', '#ec4899', '#f97316',
+	'#10b981', '#14b8a6', '#0ea5e9', '#6366f1',
+	'#a855f7', '#f43f5e', '#84cc16', '#06b6d4',
+];
+
+function avatarColor(seed: string): string {
+	let hash = 0;
+	for (let i = 0; i < seed.length; i++) {
+		hash = (hash * 31 + seed.charCodeAt(i)) | 0;
+	}
+	return AVATAR_PALETTE[Math.abs(hash) % AVATAR_PALETTE.length];
+}
+
+function avatarInitials(name: string): string {
+	const trimmed = (name || '').trim();
+	if (!trimmed) return '?';
+	const parts = trimmed.split(/[\s._-]+/).filter(Boolean);
+	if (parts.length === 0) return trimmed.slice(0, 2).toUpperCase();
+	if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+	return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function Avatar({ phid, name, size = 24 }: { phid: string; name: string; size?: number }) {
+	const style = {
+		width: size,
+		height: size,
+		fontSize: Math.max(9, Math.round(size * 0.42)),
+		background: avatarColor(phid || name),
+	};
+	return (
+		<span className="avatar" style={style} aria-hidden="true" title={name}>
+			{avatarInitials(name)}
+		</span>
+	);
+}
+
+function basename(path: string): string {
+	const idx = path.lastIndexOf('/');
+	return idx === -1 ? path : path.slice(idx + 1);
+}
+
+function InlineSnippet({ inline }: { inline: InlineAnchor }) {
+	const [collapsed, setCollapsed] = useState(false);
+	const [done, setDone] = useState(inline.isDone);
+	const [pending, setPending] = useState(false);
+	useEffect(() => {
+		setDone(inline.isDone);
+	}, [inline.isDone]);
+	const open = () => request('revealInlineComment', inline);
+	const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
+		if (e.key === 'Enter' || e.key === ' ') {
+			e.preventDefault();
+			open();
+		}
+	};
+	const toggleDone = async () => {
+		if (!inline.commentPHID || pending) return;
+		const next = !done;
+		setDone(next);
+		setPending(true);
+		try {
+			const ok = await request<boolean>('markInlineDone', {
+				commentPHID: inline.commentPHID,
+				done: next,
+			});
+			if (!ok) setDone(!next);
+		} catch {
+			setDone(!next);
+		} finally {
+			setPending(false);
+		}
+	};
+	const hasSnippet = inline.snippet.length > 0;
+	const canMarkDone = !!inline.commentPHID;
+	return (
+		<div className={`inline-snippet${done ? ' inline-snippet-done' : ''}`}>
+			<div className="inline-snippet-head">
+				{hasSnippet && (
+					<button
+						type="button"
+						className="inline-snippet-toggle"
+						aria-label={collapsed ? 'Expand snippet' : 'Collapse snippet'}
+						onClick={() => setCollapsed((v) => !v)}
+					>
+						{collapsed ? '▸' : '▾'}
+					</button>
+				)}
+				<button
+					type="button"
+					className="inline-snippet-path"
+					onClick={open}
+					title={`${inline.path}:${inline.line}`}
+				>
+					{basename(inline.path)}
+				</button>
+				{inline.isOutdated && <span className="inline-snippet-badge">Outdated</span>}
+				{canMarkDone && (
+					<label className="inline-snippet-done-toggle" title={done ? 'Mark as not done' : 'Mark as done'}>
+						<input
+							type="checkbox"
+							checked={done}
+							disabled={pending}
+							onChange={toggleDone}
+						/>
+						<span>Done</span>
+					</label>
+				)}
+			</div>
+			{hasSnippet && !collapsed && (
+				<div
+					className="inline-snippet-body"
+					role="button"
+					tabIndex={0}
+					onClick={open}
+					onKeyDown={onKey}
+					title="Open the diff at this line"
+				>
+					<table>
+						<tbody>
+							{inline.snippet.map((ln, i) => (
+								<tr key={i} className={`snippet-row snippet-${ln.type}`}>
+									<td className="snippet-num snippet-num-old">{ln.oldLine ?? ''}</td>
+									<td className="snippet-num snippet-num-new">{ln.newLine ?? ''}</td>
+									<td className="snippet-sign">
+										{ln.type === 'add' ? '+' : ln.type === 'remove' ? '-' : ' '}
+									</td>
+									<td className="snippet-code">{ln.text}</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+			)}
+		</div>
+	);
+}
+
+function splitFilePath(path: string): { dir: string; name: string } {
+	const idx = path.lastIndexOf('/');
+	if (idx === -1) return { dir: '', name: path };
+	return { dir: path.slice(0, idx + 1), name: path.slice(idx + 1) };
+}
 
 function isCommentLikeTx(tx: TimelineEntry): boolean {
 	if (tx.inline) return true;
@@ -62,7 +220,7 @@ export function App() {
 	const [payload, setPayload] = useState<OverviewPayload | undefined>();
 	const [comment, setComment] = useState('');
 	const [busy, setBusy] = useState(false);
-	const [commentsOnly, setCommentsOnly] = useState(false);
+	const [commentsOnly, setCommentsOnly] = useState(true);
 
 	useEffect(() => {
 		const dispose = subscribe((message) => {
@@ -111,32 +269,31 @@ export function App() {
 
 	return (
 		<div className="overview">
-			<header className="overview-header">
-				<h1>
-					<a href={payload.uri} target="_blank" rel="noreferrer">
-						{payload.monogram}
-					</a>
-					: {payload.title}
-				</h1>
-				<div className="status">
-					<span className={`badge status-${payload.statusValue}`}>{payload.statusName}</span>
-					<span className="author">by {payload.authorName}</span>
-					{payload.bug && (
-						<span className="bug">
-							<a
-								href={`https://bugzilla.mozilla.org/show_bug.cgi?id=${payload.bug}`}
-								target="_blank"
-								rel="noreferrer"
-							>
-								Bug {payload.bug}
-							</a>
-						</span>
-					)}
-				</div>
-			</header>
-
 			<div className="grid">
 				<main className="main-col">
+					<header className="overview-header">
+						<h1>
+							<a href={payload.uri} target="_blank" rel="noreferrer">
+								{payload.monogram}
+							</a>
+							: {payload.title}
+						</h1>
+						<div className="status">
+							<span className={`badge status-${payload.statusValue}`}>{payload.statusName}</span>
+							<span className="author">by {payload.authorName}</span>
+							{payload.bug && (
+								<span className="bug">
+									<a
+										href={`https://bugzilla.mozilla.org/show_bug.cgi?id=${payload.bug}`}
+										target="_blank"
+										rel="noreferrer"
+									>
+										Bug {payload.bug}
+									</a>
+								</span>
+							)}
+						</div>
+					</header>
 					{payload.summary && (
 						<section className="summary">
 							<h2>Summary</h2>
@@ -167,27 +324,23 @@ export function App() {
 							<p className="muted">{commentsOnly ? 'No comments yet.' : 'No activity.'}</p>
 						) : (
 							<ul>
-								{visibleTimeline.map((tx) => (
-									<li key={tx.id} className={`tx tx-${String(tx.type || 'unknown').replace(/[.:]/g, '-')}`}>
-										<header>
-											<strong>{tx.authorName}</strong>
-											<em>{transactionLabel(tx.type)}</em>
-											<time>{new Date(tx.dateCreated * 1000).toLocaleString()}</time>
-										</header>
-										{tx.inline && (
-											<button
-												className="inline-link"
-												onClick={() => request('revealInlineComment', tx.inline)}
-												title="Open the diff at this line"
-											>
-												{tx.inline.path}:{tx.inline.line}
-											</button>
-										)}
-										{tx.comments.map((c) => (
-											<Markdown key={c.phid} source={c.content} />
-										))}
-									</li>
-								))}
+								{visibleTimeline.map((tx) => {
+									const isComment = isCommentLikeTx(tx);
+									return (
+										<li key={tx.id} className={`tx tx-${String(tx.type || 'unknown').replace(/[.:]/g, '-')}`}>
+											<header>
+												{isComment && <Avatar phid={tx.authorPHID} name={tx.authorName} size={28} />}
+												<strong>{tx.authorName}</strong>
+												<em>{transactionLabel(tx.type)}</em>
+												<time>{new Date(tx.dateCreated * 1000).toLocaleString()}</time>
+											</header>
+											{tx.inline && <InlineSnippet inline={tx.inline} />}
+											{tx.comments.map((c) => (
+												<Markdown key={c.phid} source={c.content} />
+											))}
+										</li>
+									);
+								})}
 							</ul>
 						)}
 					</section>
@@ -200,10 +353,30 @@ export function App() {
 							placeholder="Leave a comment, then choose an action in the sidebar…"
 							rows={5}
 						/>
+						<div className="composer-actions">
+							<button
+								className="action action-secondary"
+								disabled={busy || comment.trim().length === 0}
+								onClick={() => submit('comment')}
+								title="Post a comment without changing review state"
+							>
+								<span className="action-icon">💬</span>
+								<span>Comment</span>
+							</button>
+						</div>
 					</section>
 				</main>
 
 				<aside className="sidebar">
+					<button
+						className="open-in-browser"
+						onClick={() => request('openInBrowser')}
+						title={`Open ${payload.monogram} on Phabricator`}
+					>
+						<span className="codicon-link">↗</span>
+						<span>Open in browser</span>
+					</button>
+
 					<section className="actions">
 						<h3>Review</h3>
 						<button
@@ -223,15 +396,6 @@ export function App() {
 						>
 							<span className="action-icon">!</span>
 							<span>Request changes</span>
-						</button>
-						<button
-							className="action action-secondary"
-							disabled={busy || comment.trim().length === 0}
-							onClick={() => submit('comment')}
-							title="Post a comment without changing review state"
-						>
-							<span className="action-icon">💬</span>
-							<span>Comment</span>
 						</button>
 
 						<div className="actions-destructive">
@@ -314,14 +478,18 @@ export function App() {
 					<section className="files">
 						<h3>Files ({payload.files.length})</h3>
 						<ul>
-							{payload.files.map((f) => (
-								<li key={f.path}>
-									<span className={`file-status file-status-${f.status}`}>
-										{f.status[0].toUpperCase()}
-									</span>
-									<span className="file-path">{f.path}</span>
-								</li>
-							))}
+							{payload.files.map((f) => {
+								const { dir, name } = splitFilePath(f.path);
+								return (
+									<li key={f.path} className={`file-row file-status-${f.status}`} title={f.path}>
+										<span className="file-status" aria-label={f.status}>
+											{f.status[0].toUpperCase()}
+										</span>
+										<span className="file-name">{name}</span>
+										{dir && <span className="file-dir">{dir}</span>}
+									</li>
+								);
+							})}
 						</ul>
 					</section>
 				</aside>

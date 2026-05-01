@@ -261,6 +261,21 @@ export class RevisionModel {
 	}
 
 	/**
+	 * Mark one or more inline comments as Done (or undo).
+	 * Pass the PHIDs of the inline transaction comments (the entries in
+	 * `transaction.comments[].phid`).
+	 */
+	public async markInlineDone(commentPHIDs: string[], done: boolean): Promise<void> {
+		await this._client.markInlineDone({
+			revisionPHID: this._revision.phid,
+			commentPHIDs,
+			done,
+		});
+		this._transactions = undefined;
+		this._onDidChange.fire();
+	}
+
+	/**
 	 * Replace the revision's project tags with the given set. Re-fetches the
 	 * revision afterwards so attachments.projects reflects the new state.
 	 */

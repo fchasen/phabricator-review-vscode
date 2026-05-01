@@ -394,6 +394,31 @@ class PhabricatorClient {
 		await this.call('differential.deleteinline', { phid });
 	}
 
+	/**
+	 * Mark an inline comment as Done (or undo it).
+	 *
+	 * Phorge accepts a `inline.done` transaction on `differential.revision.edit`
+	 * whose value is a list of inline comment PHIDs. The transaction toggles the
+	 * isDone state on each PHID; pass `done: false` to undo. We pre-check the
+	 * current state by fetching the revision's inlines is unnecessary — the
+	 * server flips state to match `done`.
+	 *
+	 * @param {{ revisionPHID: string, commentPHIDs: string[], done?: boolean }} args
+	 * @returns {Promise<EditResult>}
+	 */
+	async markInlineDone(args) {
+		const done = args.done !== false;
+		return this.editRevision({
+			objectIdentifier: args.revisionPHID,
+			transactions: [
+				{
+					type: done ? 'inline.done' : 'inline.undone',
+					value: args.commentPHIDs,
+				},
+			],
+		});
+	}
+
 	// -------------------------------------------------------------- create / update
 
 	/**
