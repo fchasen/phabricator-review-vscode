@@ -5,6 +5,10 @@
 	"version": "0.0.1",
 	"publisher": "fchasen",
 	"license": "MPL-2.0",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/fchasen/phabricator-review-vscode.git"
+	},
 	"icon": "resources/icons/marketplace.png",
 	"engines": {
 		"vscode": "^1.90.0",
