@@ -47,7 +47,7 @@ npm test            # client + composer/serializer tests
 npm run package     # build a .vsix
 ```
 
-The Conduit API client lives in `src/client/` as JSDoc-typed vanilla JS with no VS Code dependencies; tests run via `node --test` in `test/client/`.
+The Conduit API client lives in `src/client/` as JSDoc-typed JS with no VS Code dependencies; tests run via `node --test` in `test/client/`.
 
 ## License
 
