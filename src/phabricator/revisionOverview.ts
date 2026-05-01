@@ -218,11 +218,15 @@ export class RevisionOverviewPanel extends WebviewBase {
 					return this._throwError(message, err instanceof Error ? err.message : String(err));
 				}
 			}
-			case 'openRemarkupHelp': {
-				const session = this._manager.session;
-				const base = session ? session.client.baseUrl.replace(/\/api\/?$/, '') : 'https://phabricator.services.mozilla.com';
-				vscode.env.openExternal(vscode.Uri.parse(`${base}/book/phabricator/article/remarkup/`));
-				return this._replyMessage(message, true);
+			case 'promptInput': {
+				const args = (message.args || {}) as { prompt?: string; value?: string; placeHolder?: string };
+				const result = await vscode.window.showInputBox({
+					prompt: args.prompt,
+					value: args.value,
+					placeHolder: args.placeHolder,
+					ignoreFocusOut: true,
+				});
+				return this._replyMessage(message, result === undefined ? null : result);
 			}
 			case 'searchUsers': {
 				const session = this._manager.session;

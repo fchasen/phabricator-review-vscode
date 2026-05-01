@@ -231,23 +231,6 @@ body {
 	display: flex; flex-direction: column;
 }
 .remarkup-composer.is-disabled { opacity: 0.6; pointer-events: none; }
-.remarkup-composer-tabs {
-	display: flex; align-items: center; gap: 4px;
-	padding: 4px 6px;
-	border-bottom: 1px solid var(--vscode-panel-border);
-}
-.remarkup-composer-tabs .tab {
-	background: transparent; color: inherit;
-	border: 1px solid transparent;
-	padding: 3px 10px; font-size: 0.85em;
-	border-radius: 3px; cursor: pointer;
-}
-.remarkup-composer-tabs .tab.is-active {
-	background: var(--vscode-button-secondaryBackground);
-	border-color: var(--vscode-contrastBorder, transparent);
-}
-.remarkup-help { margin-left: auto; font-size: 0.8em; color: var(--vscode-textLink-foreground); text-decoration: none; }
-.remarkup-help:hover { text-decoration: underline; }
 .remarkup-toolbar {
 	display: flex; gap: 2px; flex-wrap: wrap;
 	padding: 4px 6px;

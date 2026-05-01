@@ -195,7 +195,7 @@ function buildButtons(): ToolButton[] {
 }
 
 const linkButton = {
-	label: '🔗',
+	label: '↗',
 	title: 'Link (⌘K)',
 };
 
@@ -336,7 +336,7 @@ export function RemarkupComposer({ onChange, disabled, placeholder }: Props) {
 	const exec = (cmd: Command) => {
 		const view = viewRef.current;
 		if (!view) return;
-		cmd(view.state, view.dispatch, view);
+		cmd(view.state, (tr) => view.dispatch(tr), view);
 		view.focus();
 	};
 
@@ -375,49 +375,23 @@ export function RemarkupComposer({ onChange, disabled, placeholder }: Props) {
 
 	return (
 		<div className={`remarkup-composer${disabled ? ' is-disabled' : ''}`}>
-			<div className="remarkup-composer-tabs">
-				<button
-					type="button"
-					className={`tab${tab === 'write' ? ' is-active' : ''}`}
-					onClick={() => switchTab('write')}
-				>
-					Write
-				</button>
-				<button
-					type="button"
-					className={`tab${tab === 'preview' ? ' is-active' : ''}`}
-					onClick={() => switchTab('preview')}
-				>
-					Preview
-				</button>
-				<a
-					className="remarkup-help"
-					href="#"
-					onClick={(e) => {
-						e.preventDefault();
-						request('openRemarkupHelp');
-					}}
-				>
-					Remarkup help
-				</a>
-			</div>
-			{tab === 'write' && (
-				<div className="remarkup-toolbar">
-					{buttons.map((b) => {
-						const active = editorState && b.isActive ? b.isActive(editorState) : false;
-						return (
-							<button
-								key={b.label}
-								type="button"
-								className={`tool${active ? ' is-active' : ''}`}
-								title={b.title}
-								onMouseDown={(e) => e.preventDefault()}
-								onClick={() => exec(b.command)}
-							>
-								{b.label}
-							</button>
-						);
-					})}
+			<div className="remarkup-toolbar">
+				{tab === 'write' && buttons.map((b) => {
+					const active = editorState && b.isActive ? b.isActive(editorState) : false;
+					return (
+						<button
+							key={b.label}
+							type="button"
+							className={`tool${active ? ' is-active' : ''}`}
+							title={b.title}
+							onMouseDown={(e) => e.preventDefault()}
+							onClick={() => exec(b.command)}
+						>
+							{b.label}
+						</button>
+					);
+				})}
+				{tab === 'write' && (
 					<button
 						type="button"
 						className="tool"
@@ -427,8 +401,27 @@ export function RemarkupComposer({ onChange, disabled, placeholder }: Props) {
 					>
 						{linkButton.label}
 					</button>
-				</div>
-			)}
+				)}
+				<button
+					type="button"
+					className={`tool tool-mode${tab === 'write' ? ' is-active' : ''}`}
+					title="Write"
+					style={{ marginLeft: 'auto' }}
+					onMouseDown={(e) => e.preventDefault()}
+					onClick={() => switchTab('write')}
+				>
+					✎
+				</button>
+				<button
+					type="button"
+					className={`tool tool-mode${tab === 'preview' ? ' is-active' : ''}`}
+					title="Preview"
+					onMouseDown={(e) => e.preventDefault()}
+					onClick={() => switchTab('preview')}
+				>
+					👁
+				</button>
+			</div>
 			<div className="remarkup-composer-body">
 				<div ref={editorRef} className="remarkup-editor-host" style={editorStyle}>
 					{isEmpty && tab === 'write' && placeholder && (
@@ -481,18 +474,26 @@ export function RemarkupComposer({ onChange, disabled, placeholder }: Props) {
 	);
 }
 
-function promptLink(view: EditorView) {
-	const { state } = view;
-	const { from, to, empty } = state.selection;
-	const selectedText = empty ? '' : state.doc.textBetween(from, to, ' ');
-	const href = window.prompt(selectedText ? `Link target for "${selectedText}":` : 'Link target URL:', 'https://');
-	if (!href) return;
+async function promptLink(view: EditorView) {
+	const initial = view.state.selection;
+	const { from, to, empty } = initial;
+	const selectedText = empty ? '' : view.state.doc.textBetween(from, to, ' ');
+	const href = await request<string | null>('promptInput', {
+		prompt: selectedText ? `Link target for "${selectedText}"` : 'Link target URL',
+		value: 'https://',
+		placeHolder: 'https://example.com',
+	});
+	if (!href || typeof href !== 'string') return;
 	const linkMark = remarkupSchema.marks.link.create({ href });
+	const state = view.state;
 	let tr = state.tr;
 	if (empty) {
-		const display = window.prompt('Link text:', href) || href;
+		const display = await request<string | null>('promptInput', {
+			prompt: 'Link text',
+			value: href,
+		}) || href;
 		const node = state.schema.text(display, [linkMark]);
-		tr = tr.replaceSelectionWith(node, false);
+		tr = tr.replaceRangeWith(from, to, node);
 	} else {
 		tr = tr.addMark(from, to, linkMark);
 	}
