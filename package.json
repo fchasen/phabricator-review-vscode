@@ -3,7 +3,7 @@
 	"displayName": "Phabricator Review",
 	"description": "Review and create Phabricator revisions on Mozilla's instance.",
 	"version": "0.0.1",
-	"publisher": "fchasen@gmail.com",
+	"publisher": "fchasen",
 	"license": "MPL-2.0",
 	"icon": "resources/icons/marketplace.png",
 	"engines": {

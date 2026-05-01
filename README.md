@@ -51,4 +51,4 @@ The `phabricator-client/` workspace is a pure-JS Conduit API client consumed via
 
 ## License
 
-[MPL-2.0](./LICENSE).
+MPL-2.0. See the `LICENSE` file in the source tree.
