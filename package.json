@@ -142,6 +142,13 @@
 	"dependencies": {
 		"markdown-it": "^14.1.1",
 		"phabricator-client": "file:./phabricator-client",
+		"prosemirror-commands": "^1.7.1",
+		"prosemirror-history": "^1.5.0",
+		"prosemirror-keymap": "^1.2.3",
+		"prosemirror-model": "^1.25.4",
+		"prosemirror-schema-list": "^1.5.1",
+		"prosemirror-state": "^1.4.4",
+		"prosemirror-view": "^1.41.8",
 		"react": "^18.3.1",
 		"react-dom": "^18.3.1"
 	},
