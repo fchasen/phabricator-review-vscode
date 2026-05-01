@@ -117,32 +117,44 @@ function findListAncestor($pos: import('prosemirror-model').ResolvedPos): { dept
 
 function toggleList(listType: NodeType): Command {
 	return (state, dispatch) => {
+		console.log('[toggleList] called', listType.name, 'sel:', state.selection.from, '-', state.selection.to);
 		const { $from, $to } = state.selection;
 		const range = $from.blockRange($to);
+		console.log('[toggleList] range:', range
+			? `start=${range.start} end=${range.end} depth=${range.depth} parent=${range.parent.type.name} startIdx=${range.startIndex} endIdx=${range.endIndex}`
+			: 'NULL');
 		if (!range) return false;
 		const ancestor = findListAncestor($from);
+		console.log('[toggleList] ancestor:', ancestor ? ancestor.node.type.name : 'none');
 
 		if (ancestor && ancestor.node.type === listType) {
-			return liftListItem(remarkupSchema.nodes.list_item)(state, dispatch);
+			const ok = liftListItem(remarkupSchema.nodes.list_item)(state, dispatch);
+			console.log('[toggleList] liftListItem →', ok);
+			return ok;
 		}
 
 		if (!dispatch) return true;
 
-		// Build a fresh list out of the blocks in `range`. Each block becomes
-		// a list_item; non-paragraph blocks are wrapped in a paragraph so
-		// list_item's content rule (`paragraph block*`) is satisfied.
-		const items: PmNode[] = [];
-		for (let i = range.startIndex; i < range.endIndex; i++) {
-			const child = range.parent.child(i);
-			const inner = child.type === remarkupSchema.nodes.paragraph
-				? child
-				: remarkupSchema.nodes.paragraph.create(null, child.content);
-			items.push(remarkupSchema.nodes.list_item.create(null, inner));
+		try {
+			const items: PmNode[] = [];
+			for (let i = range.startIndex; i < range.endIndex; i++) {
+				const child = range.parent.child(i);
+				console.log('[toggleList] child', i, child.type.name, 'size=', child.nodeSize);
+				const inner = child.type === remarkupSchema.nodes.paragraph
+					? child
+					: remarkupSchema.nodes.paragraph.create(null, child.content);
+				items.push(remarkupSchema.nodes.list_item.create(null, inner));
+			}
+			const list = listType.create(null, items);
+			console.log('[toggleList] built list', list.toString());
+			const tr = state.tr.replaceWith(range.start, range.end, list);
+			console.log('[toggleList] dispatching, tr.docChanged=', tr.docChanged);
+			dispatch(tr.scrollIntoView());
+			return true;
+		} catch (err) {
+			console.error('[toggleList] threw', err);
+			return false;
 		}
-		const list = listType.create(null, items);
-		const tr = state.tr.replaceWith(range.start, range.end, list);
-		dispatch(tr.scrollIntoView());
-		return true;
 	};
 }
 
@@ -370,8 +382,12 @@ export function RemarkupComposer({ onChange, disabled, placeholder }: Props) {
 
 	const exec = (cmd: Command) => {
 		const view = viewRef.current;
-		if (!view) return;
-		cmd(view.state, (tr) => view.dispatch(tr), view);
+		if (!view) {
+			console.log('[exec] no view');
+			return;
+		}
+		const result = cmd(view.state, (tr) => view.dispatch(tr), view);
+		console.log('[exec] command returned', result);
 		view.focus();
 	};
 

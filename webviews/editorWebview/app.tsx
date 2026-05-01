@@ -359,11 +359,7 @@ export function App() {
 
 					<section className="composer">
 						<h2>Reply</h2>
-						<RemarkupComposer
-							onChange={setComment}
-							disabled={busy}
-							placeholder="Leave a comment, then choose an action in the sidebar…"
-						/>
+						<RemarkupComposer onChange={setComment} disabled={busy} />
 						<div className="composer-actions">
 							<button
 								className="action action-secondary"
@@ -371,7 +367,7 @@ export function App() {
 								onClick={() => submit('comment')}
 								title="Post a comment without changing review state"
 							>
-								<span className="action-icon">💬</span>
+								<i className="codicon codicon-comment" />
 								<span>Comment</span>
 							</button>
 						</div>
