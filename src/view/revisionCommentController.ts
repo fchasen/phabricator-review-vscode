@@ -254,6 +254,26 @@ export class RevisionCommentController extends Disposable {
 		}
 		const threads: vscode.CommentThread[] = [];
 
+		const allTexts: string[] = [];
+		for (const tx of inlines) {
+			for (const c of (tx.comments || []).filter((c) => !c.removed)) {
+				allTexts.push(c.content.raw);
+			}
+		}
+		let renderedByText = new Map<string, string>();
+		try {
+			const rendered = await model.renderRemarkup(allTexts);
+			for (let i = 0; i < allTexts.length; i++) {
+				renderedByText.set(allTexts[i], rendered[i] || '');
+			}
+		} catch (err) {
+			Logger.warn(
+				`remarkup.process for inlines failed; falling back to raw text: ${err instanceof Error ? err.message : err}`,
+				COMPONENT,
+			);
+			renderedByText = new Map();
+		}
+
 		for (const group of groupReplies(inlines)) {
 			const head = group[0];
 			const fields = (head.fields as InlineFields) || {};
@@ -276,8 +296,14 @@ export class RevisionCommentController extends Disposable {
 			for (const tx of group) {
 				const author = model.userResolver.displayName(tx.authorPHID);
 				for (const c of (tx.comments || []).filter((c) => !c.removed)) {
+					const html = renderedByText.get(c.content.raw);
+					const md = html ? new vscode.MarkdownString(html) : new vscode.MarkdownString(c.content.raw);
+					if (html) {
+						md.supportHtml = true;
+					}
+					md.isTrusted = false;
 					comments.push({
-						body: new vscode.MarkdownString(c.content.raw),
+						body: md,
 						mode: vscode.CommentMode.Preview,
 						author: { name: author },
 						timestamp: new Date(c.dateCreated * 1000),

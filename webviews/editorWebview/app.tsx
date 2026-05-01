@@ -1,6 +1,6 @@
 import { type KeyboardEvent, useEffect, useMemo, useState } from 'react';
 import { ready, subscribe, request } from '../common/message';
-import { Markdown } from '../common/markdown';
+import { Remarkup } from '../common/remarkup';
 import { transactionLabel } from '../common/txLabels';
 
 interface ProjectTag {
@@ -34,7 +34,7 @@ interface TimelineEntry {
 	authorPHID: string;
 	authorName: string;
 	dateCreated: number;
-	comments: Array<{ phid: string; content: string }>;
+	comments: Array<{ phid: string; content: string; contentHtml: string }>;
 	inline?: InlineAnchor;
 }
 
@@ -50,7 +50,9 @@ interface OverviewPayload {
 	isAuthor: boolean;
 	isReviewer: boolean;
 	summary: string;
+	summaryHtml: string;
 	testPlan: string;
+	testPlanHtml: string;
 	reviewers: Array<{ phid: string; displayName: string; isProject: boolean; status: string; isBlocking: boolean }>;
 	subscribers: string[];
 	files: Array<{ path: string; status: string }>;
@@ -297,14 +299,14 @@ export function App() {
 					{payload.summary && (
 						<section className="summary">
 							<h2>Summary</h2>
-							<Markdown source={payload.summary} />
+							<Remarkup html={payload.summaryHtml} source={payload.summary} />
 						</section>
 					)}
 
 					{payload.testPlan && (
 						<section className="test-plan">
 							<h2>Test plan</h2>
-							<Markdown source={payload.testPlan} />
+							<Remarkup html={payload.testPlanHtml} source={payload.testPlan} />
 						</section>
 					)}
 
@@ -336,7 +338,7 @@ export function App() {
 											</header>
 											{tx.inline && <InlineSnippet inline={tx.inline} />}
 											{tx.comments.map((c) => (
-												<Markdown key={c.phid} source={c.content} />
+												<Remarkup key={c.phid} html={c.contentHtml} source={c.content} />
 											))}
 										</li>
 									);

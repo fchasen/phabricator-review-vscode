@@ -3,6 +3,7 @@ import { PhabricatorClient } from 'phabricator-client';
 import type { Changeset } from 'phabricator-client';
 import type { Revision, Diff, Transaction } from './interface';
 import { synthesizeSideFromCorpus } from '../common/diffHunk';
+import { sanitizeRenderedHtml, rewriteRelativeUrls } from '../common/htmlSanitize';
 import { UserResolver } from './userResolver';
 import { LocalGitResolver } from './localGitResolver';
 
@@ -14,6 +15,7 @@ export class RevisionModel {
 	private _activeDiffPHID: string | undefined;
 	private _changesetsCache = new Map<number, Changeset[]>();
 	private _transactions: Transaction[] | undefined;
+	private _remarkupCache = new Map<string, string>();
 
 	constructor(
 		private _revision: Revision,
@@ -173,6 +175,40 @@ export class RevisionModel {
 	 */
 	public async tryLocalGitBase(commit: string, path: string): Promise<string | null> {
 		return this._localGit.fetchFile(commit, path);
+	}
+
+	/**
+	 * Render Remarkup source to sanitized HTML via Phabricator's own renderer.
+	 * Batches a request with all uncached entries into a single Conduit call
+	 * and caches results by raw text — `summary`, `testPlan`, and timeline
+	 * comment bodies all share one cache and one network round-trip per
+	 * refresh.
+	 */
+	public async renderRemarkup(texts: string[]): Promise<string[]> {
+		if (texts.length === 0) return [];
+		const out = new Array<string>(texts.length);
+		const missing: { idx: number; text: string }[] = [];
+		for (let i = 0; i < texts.length; i++) {
+			const cached = this._remarkupCache.get(texts[i]);
+			if (cached !== undefined) {
+				out[i] = cached;
+			} else {
+				missing.push({ idx: i, text: texts[i] });
+			}
+		}
+		if (missing.length > 0) {
+			const baseUrl = this._client.baseUrl;
+			const rendered = await this._client.processRemarkup(
+				missing.map((m) => m.text),
+				{ context: 'phriction-document' },
+			);
+			for (let j = 0; j < missing.length; j++) {
+				const html = sanitizeRenderedHtml(rewriteRelativeUrls(rendered[j] || '', baseUrl));
+				this._remarkupCache.set(missing[j].text, html);
+				out[missing[j].idx] = html;
+			}
+		}
+		return out;
 	}
 
 	public async getTransactions(): Promise<Transaction[]> {

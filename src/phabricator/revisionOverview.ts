@@ -22,7 +22,9 @@ interface OverviewPayload {
 	isAuthor: boolean;
 	isReviewer: boolean;
 	summary: string;
+	summaryHtml: string;
 	testPlan: string;
+	testPlanHtml: string;
 	reviewers: Array<{
 		phid: string;
 		displayName: string;
@@ -43,7 +45,7 @@ interface OverviewPayload {
 		authorName: string;
 		dateCreated: number;
 		fields: object;
-		comments: Array<{ phid: string; content: string; dateCreated: number }>;
+		comments: Array<{ phid: string; content: string; contentHtml: string; dateCreated: number }>;
 		inline?: InlineLink;
 	}>;
 }
@@ -279,6 +281,40 @@ export class RevisionOverviewPanel extends WebviewBase {
 			await resolver.resolveMany(Array.from(phidsToResolve));
 		}
 
+		const summary = revision.fields.summary || '';
+		const testPlan = revision.fields.testPlan || '';
+		type CommentSlot = { phid: string; content: string; dateCreated: number; htmlIdx: number };
+		const commentSlots: CommentSlot[] = [];
+		const renderInputs: string[] = [summary, testPlan];
+		for (const t of transactions) {
+			for (const c of t.comments || []) {
+				if (c.removed) continue;
+				commentSlots.push({
+					phid: c.phid,
+					content: c.content.raw,
+					dateCreated: c.dateCreated,
+					htmlIdx: renderInputs.length,
+				});
+				renderInputs.push(c.content.raw);
+			}
+		}
+		let renderedHtml: string[];
+		try {
+			renderedHtml = await this._model.renderRemarkup(renderInputs);
+		} catch (err) {
+			Logger.warn(
+				`remarkup.process failed; falling back to raw text: ${err instanceof Error ? err.message : err}`,
+				'Overview',
+			);
+			renderedHtml = renderInputs.map(() => '');
+		}
+		const summaryHtml = renderedHtml[0] || '';
+		const testPlanHtml = renderedHtml[1] || '';
+		const commentHtmlByPHID = new Map<string, string>();
+		for (const slot of commentSlots) {
+			commentHtmlByPHID.set(slot.phid, renderedHtml[slot.htmlIdx] || '');
+		}
+
 		return {
 			id: revision.id,
 			monogram: this._model.monogram,
@@ -293,8 +329,10 @@ export class RevisionOverviewPanel extends WebviewBase {
 			bug: revision.fields.bugzilla?.['bug-id'] || null,
 			isAuthor,
 			isReviewer,
-			summary: revision.fields.summary || '',
-			testPlan: revision.fields.testPlan || '',
+			summary,
+			summaryHtml,
+			testPlan,
+			testPlanHtml,
 			reviewers: reviewerEntries.map((r) => ({
 				phid: r.reviewerPHID,
 				displayName: resolver?.displayName(r.reviewerPHID) || r.reviewerPHID,
@@ -320,7 +358,12 @@ export class RevisionOverviewPanel extends WebviewBase {
 				fields: t.fields,
 				comments: (t.comments || [])
 					.filter((c) => !c.removed)
-					.map((c) => ({ phid: c.phid, content: c.content.raw, dateCreated: c.dateCreated })),
+					.map((c) => ({
+						phid: c.phid,
+						content: c.content.raw,
+						contentHtml: commentHtmlByPHID.get(c.phid) || '',
+						dateCreated: c.dateCreated,
+					})),
 				inline: extractInlineLink(t, statusByPath, changesetByPath, flatByChangeset, activeDiffPHID),
 			})),
 		};
@@ -332,7 +375,7 @@ export class RevisionOverviewPanel extends WebviewBase {
 			vscode.Uri.joinPath(this._extensionUri, 'dist', 'webviews', 'revisionOverview.js'),
 		);
 		const nonce = makeNonce();
-		const csp = `default-src 'none'; script-src 'nonce-${nonce}'; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource};`;
+		const csp = `default-src 'none'; script-src 'nonce-${nonce}'; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; img-src ${webview.cspSource} https: data:;`;
 		return `<!DOCTYPE html>
 <html lang="en">
 <head>
