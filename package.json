@@ -5,6 +5,7 @@
 	"version": "0.0.1",
 	"publisher": "fchasen@gmail.com",
 	"license": "MPL-2.0",
+	"icon": "resources/icons/marketplace.png",
 	"engines": {
 		"vscode": "^1.90.0",
 		"node": ">=18"
