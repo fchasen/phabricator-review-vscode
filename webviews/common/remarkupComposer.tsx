@@ -4,8 +4,8 @@ import { EditorView } from 'prosemirror-view';
 import { keymap } from 'prosemirror-keymap';
 import { history, undo, redo } from 'prosemirror-history';
 import { baseKeymap, toggleMark, wrapIn, setBlockType, chainCommands, exitCode } from 'prosemirror-commands';
-import { wrapInList, splitListItem, liftListItem, sinkListItem } from 'prosemirror-schema-list';
-import type { MarkType } from 'prosemirror-model';
+import { splitListItem, liftListItem, sinkListItem } from 'prosemirror-schema-list';
+import type { MarkType, NodeType, Node as PmNode } from 'prosemirror-model';
 
 import { remarkupSchema } from './remarkupSchema';
 import { pmDocToRemarkup } from './remarkupSerialize';
@@ -105,6 +105,47 @@ function toggleHeading(level: number): Command {
 	};
 }
 
+function findListAncestor($pos: import('prosemirror-model').ResolvedPos): { depth: number; node: PmNode } | null {
+	for (let d = $pos.depth; d > 0; d--) {
+		const n = $pos.node(d);
+		if (n.type === remarkupSchema.nodes.bullet_list || n.type === remarkupSchema.nodes.ordered_list) {
+			return { depth: d, node: n };
+		}
+	}
+	return null;
+}
+
+function toggleList(listType: NodeType): Command {
+	return (state, dispatch) => {
+		const { $from, $to } = state.selection;
+		const range = $from.blockRange($to);
+		if (!range) return false;
+		const ancestor = findListAncestor($from);
+
+		if (ancestor && ancestor.node.type === listType) {
+			return liftListItem(remarkupSchema.nodes.list_item)(state, dispatch);
+		}
+
+		if (!dispatch) return true;
+
+		// Build a fresh list out of the blocks in `range`. Each block becomes
+		// a list_item; non-paragraph blocks are wrapped in a paragraph so
+		// list_item's content rule (`paragraph block*`) is satisfied.
+		const items: PmNode[] = [];
+		for (let i = range.startIndex; i < range.endIndex; i++) {
+			const child = range.parent.child(i);
+			const inner = child.type === remarkupSchema.nodes.paragraph
+				? child
+				: remarkupSchema.nodes.paragraph.create(null, child.content);
+			items.push(remarkupSchema.nodes.list_item.create(null, inner));
+		}
+		const list = listType.create(null, items);
+		const tr = state.tr.replaceWith(range.start, range.end, list);
+		dispatch(tr.scrollIntoView());
+		return true;
+	};
+}
+
 function buildKeymap() {
 	const km: Record<string, Command> = {
 		'Mod-z': undo,
@@ -169,12 +210,20 @@ function buildButtons(): ToolButton[] {
 		{
 			icon: 'list-unordered',
 			title: 'Bulleted list',
-			command: wrapInList(remarkupSchema.nodes.bullet_list),
+			command: toggleList(remarkupSchema.nodes.bullet_list),
+			isActive: (s) => {
+				const a = findListAncestor(s.selection.$from);
+				return !!a && a.node.type === remarkupSchema.nodes.bullet_list;
+			},
 		},
 		{
 			icon: 'list-ordered',
 			title: 'Numbered list',
-			command: wrapInList(remarkupSchema.nodes.ordered_list),
+			command: toggleList(remarkupSchema.nodes.ordered_list),
+			isActive: (s) => {
+				const a = findListAncestor(s.selection.$from);
+				return !!a && a.node.type === remarkupSchema.nodes.ordered_list;
+			},
 		},
 		{
 			icon: 'symbol-namespace',
