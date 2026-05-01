@@ -26,6 +26,14 @@ export class CredentialStore extends Disposable {
 		private readonly _config: () => string,
 	) {
 		super();
+		this._register(
+			vscode.workspace.onDidChangeConfiguration((e) => {
+				if (e.affectsConfiguration('phabricator.baseUrl') && this._session) {
+					Logger.info('phabricator.baseUrl changed, signing out', AUTH);
+					void this.signOut();
+				}
+			}),
+		);
 	}
 
 	public get session(): PhabSession | undefined {
