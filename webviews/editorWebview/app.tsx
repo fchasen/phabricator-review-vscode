@@ -1,8 +1,11 @@
-import { type KeyboardEvent, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, type KeyboardEvent, useEffect, useMemo, useState } from 'react';
 import { ready, subscribe, request } from '../common/message';
 import { Remarkup } from '../common/remarkup';
-import { RemarkupComposer } from '../common/remarkupComposer';
 import { transactionLabel } from '../common/txLabels';
+
+const RemarkupComposer = lazy(() =>
+	import('../common/remarkupComposer').then((m) => ({ default: m.RemarkupComposer })),
+);
 
 interface ProjectTag {
 	phid: string;
@@ -367,7 +370,9 @@ export function App() {
 
 					<section className="composer">
 						<h2>Reply</h2>
-						<RemarkupComposer onChange={setComment} disabled={busy} />
+						<Suspense fallback={<div className="composer-loading">Loading editor…</div>}>
+							<RemarkupComposer onChange={setComment} disabled={busy} />
+						</Suspense>
 						<div className="composer-actions">
 							<button
 								className="action action-secondary"

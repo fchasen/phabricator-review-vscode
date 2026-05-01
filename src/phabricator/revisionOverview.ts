@@ -422,7 +422,7 @@ export class RevisionOverviewPanel extends WebviewBase {
 			vscode.Uri.joinPath(this._extensionUri, 'dist', 'webviews', 'revisionOverview.js'),
 		);
 		const nonce = makeNonce();
-		const csp = `default-src 'none'; script-src 'nonce-${nonce}'; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; img-src ${webview.cspSource} https: data:;`;
+		const csp = `default-src 'none'; script-src 'nonce-${nonce}' ${webview.cspSource}; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; img-src ${webview.cspSource} https: data:;`;
 		return `<!DOCTYPE html>
 <html lang="en">
 <head>

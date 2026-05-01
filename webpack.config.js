@@ -15,6 +15,8 @@ function makeConfig(opts) {
 		output: {
 			path: path.resolve(__dirname, opts.outDir),
 			filename: '[name].js',
+			chunkFilename: opts.target === 'web' ? '[name].chunk.js' : undefined,
+			publicPath: opts.target === 'web' ? 'auto' : undefined,
 			libraryTarget: opts.target === 'node' ? 'commonjs2' : undefined,
 			devtoolModuleFilenameTemplate: '../[resource-path]',
 		},
