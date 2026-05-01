@@ -200,7 +200,7 @@ export class RevisionModel {
 			const baseUrl = this._client.baseUrl;
 			const rendered = await this._client.processRemarkup(
 				missing.map((m) => m.text),
-				{ context: 'phriction-document' },
+				{ context: 'differential' },
 			);
 			for (let j = 0; j < missing.length; j++) {
 				const html = sanitizeRenderedHtml(rewriteRelativeUrls(rendered[j] || '', baseUrl));

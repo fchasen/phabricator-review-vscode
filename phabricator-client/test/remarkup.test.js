@@ -28,7 +28,7 @@ test('processRemarkup posts contents and returns HTML strings', async () => {
 	const decoded = decodeBody(calls[0].body);
 	assert.equal(calls[0].url.endsWith('remarkup.process'), true);
 	assert.deepEqual(decoded.params.contents, ['**hi**', 'two']);
-	assert.equal(decoded.params.context, 'phriction-document');
+	assert.equal(decoded.params.context, 'differential');
 });
 
 test('processRemarkup forwards a custom engine context', async () => {
@@ -43,10 +43,10 @@ test('processRemarkup forwards a custom engine context', async () => {
 	]);
 	const client = new PhabricatorClient({ token: 't', fetch: fetchImpl });
 
-	await client.processRemarkup(['x'], { context: 'differential-revision' });
+	await client.processRemarkup(['x'], { context: 'phriction' });
 
 	const decoded = decodeBody(calls[0].body);
-	assert.equal(decoded.params.context, 'differential-revision');
+	assert.equal(decoded.params.context, 'phriction');
 });
 
 test('processRemarkup returns empty array without making a call when input is empty', async () => {

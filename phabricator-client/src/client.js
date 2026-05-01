@@ -67,11 +67,12 @@ class PhabricatorClient {
 	 * a parallel list of HTML strings. Returns an empty array if `contents` is
 	 * empty (no Conduit call made).
 	 *
-	 * Note: `context` is the renderer **engine** name (e.g. `phriction-document`,
-	 * `differential-revision`), not a PHID. Phabricator returns
-	 * `ERR-INVALID_ENGINE` for unknown engine names. Defaults to
-	 * `phriction-document`, which is the most permissive engine available on
-	 * most installs.
+	 * Note: `context` is the renderer **engine** name. Upstream Phabricator
+	 * registers `phriction`, `maniphest`, `differential`, and `feed`; only
+	 * applications that are installed on the instance produce valid keys, and
+	 * unknown keys come back as `ERR-INVALID_ENGINE`. Defaults to
+	 * `differential` since this client targets a Differential install
+	 * (Mozilla's instance has Phriction disabled).
 	 *
 	 * @param {string[]} contents
 	 * @param {{ context?: string }} [opts]
@@ -82,7 +83,7 @@ class PhabricatorClient {
 			return [];
 		}
 		const args = {
-			context: (opts && opts.context) || 'phriction-document',
+			context: (opts && opts.context) || 'differential',
 			contents,
 		};
 		/** @type {any} */
