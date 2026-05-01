@@ -135,9 +135,12 @@ export class RevisionOverviewPanel extends WebviewBase {
 			case 'openInBrowser':
 				vscode.env.openExternal(vscode.Uri.parse(this._model.uri));
 				return this._replyMessage(message, true);
-			case 'openLando':
-				vscode.env.openExternal(vscode.Uri.parse(`https://lando.moz.tools/${this._model.id}/`));
+			case 'openLando': {
+				const base = vscode.workspace.getConfiguration('phabricator').get<string>('landoBaseUrl', 'https://lando.moz.tools/');
+				const trimmed = base.endsWith('/') ? base : `${base}/`;
+				vscode.env.openExternal(vscode.Uri.parse(`${trimmed}${this._model.id}/`));
 				return this._replyMessage(message, true);
+			}
 			case 'comment':
 				try {
 					await this._model.comment(String(message.args));
@@ -571,16 +574,20 @@ interface SearchfoxItem extends vscode.QuickPickItem {
 	insertText: string;
 }
 
-const SEARCHFOX_BASE = 'https://searchfox.org/firefox-main/source/';
 const SEARCHFOX_DEBOUNCE_MS = 250;
 const SEARCHFOX_LIMIT = 50;
+
+function searchfoxBase(): string {
+	const repo = vscode.workspace.getConfiguration('phabricator').get<string>('searchfoxRepo', 'firefox-main');
+	return `https://searchfox.org/${repo}/source/`;
+}
 
 function basenameOf(path: string): string {
 	const slash = path.lastIndexOf('/');
 	return slash >= 0 ? path.slice(slash + 1) : path;
 }
 
-function parsePathOutput(stdout: string): SearchfoxItem[] {
+function parsePathOutput(stdout: string, base: string): SearchfoxItem[] {
 	const items: SearchfoxItem[] = [];
 	for (const raw of stdout.split('\n')) {
 		const line = raw.trim();
@@ -590,7 +597,7 @@ function parsePathOutput(stdout: string): SearchfoxItem[] {
 		items.push({
 			label: file,
 			description: path,
-			url: `${SEARCHFOX_BASE}${path}`,
+			url: `${base}${path}`,
 			insertText: file,
 			alwaysShow: true,
 		});
@@ -598,7 +605,7 @@ function parsePathOutput(stdout: string): SearchfoxItem[] {
 	return items;
 }
 
-function parseSymbolOutput(stdout: string, symbol: string): SearchfoxItem[] {
+function parseSymbolOutput(stdout: string, symbol: string, base: string): SearchfoxItem[] {
 	const items: SearchfoxItem[] = [];
 	for (const raw of stdout.split('\n')) {
 		const line = raw.trimEnd();
@@ -610,7 +617,7 @@ function parseSymbolOutput(stdout: string, symbol: string): SearchfoxItem[] {
 			label: `${basenameOf(path)}:${lineNo}`,
 			description: path,
 			detail: snippet,
-			url: `${SEARCHFOX_BASE}${path}#${lineNo}`,
+			url: `${base}${path}#${lineNo}`,
 			insertText: symbol,
 			alwaysShow: true,
 		});
@@ -640,6 +647,7 @@ type Mode = 'path' | 'symbol';
 
 function runSearchfoxLivePicker(mode: Mode): Promise<{ url: string; text: string } | null> {
 	return new Promise((resolve) => {
+		const base = searchfoxBase();
 		const qp = vscode.window.createQuickPick<SearchfoxItem>();
 		qp.placeholder = mode === 'path'
 			? 'Find file in Searchfox'
@@ -681,7 +689,7 @@ function runSearchfoxLivePicker(mode: Mode): Promise<{ url: string; text: string
 					qp.items = [];
 					return;
 				}
-				qp.items = mode === 'path' ? parsePathOutput(stdout) : parseSymbolOutput(stdout, term);
+				qp.items = mode === 'path' ? parsePathOutput(stdout, base) : parseSymbolOutput(stdout, term, base);
 			});
 		};
 

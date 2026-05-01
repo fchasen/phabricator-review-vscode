@@ -132,6 +132,16 @@
 					"default": 300,
 					"minimum": 30,
 					"description": "How often to poll Phabricator for revision updates while the editor is focused."
+				},
+				"phabricator.landoBaseUrl": {
+					"type": "string",
+					"default": "https://lando.moz.tools/",
+					"description": "Base URL used by the 'View in Lando' command. The revision id is appended to this URL."
+				},
+				"phabricator.searchfoxRepo": {
+					"type": "string",
+					"default": "firefox-main",
+					"description": "Searchfox repository identifier used when generating links from the composer (e.g. firefox-main, mozilla-central, comm-central)."
 				}
 			}
 		}
