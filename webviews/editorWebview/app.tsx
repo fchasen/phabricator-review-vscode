@@ -62,12 +62,20 @@ interface OverviewPayload {
 }
 
 const REVIEWER_STATE_ICON: Record<string, string> = {
-	'accepted': '✓',
-	'accepted-prior': '✓',
-	'rejected': '✗',
-	'blocking': '⛔',
-	'resigned': '↩',
-	'added': '○',
+	'accepted': 'check',
+	'accepted-prior': 'check',
+	'rejected': 'close',
+	'blocking': 'circle-slash',
+	'resigned': 'reply',
+	'added': 'circle-large-outline',
+};
+
+const FILE_STATUS_ICON: Record<string, string> = {
+	'added': 'diff-added',
+	'removed': 'diff-removed',
+	'modified': 'diff-modified',
+	'renamed': 'diff-renamed',
+	'copied': 'copy',
 };
 
 const AVATAR_PALETTE = [
@@ -155,7 +163,7 @@ function InlineSnippet({ inline, canEdit }: { inline: InlineAnchor; canEdit: boo
 						aria-label={collapsed ? 'Expand snippet' : 'Collapse snippet'}
 						onClick={() => setCollapsed((v) => !v)}
 					>
-						{collapsed ? '▸' : '▾'}
+						<i className={`codicon codicon-chevron-${collapsed ? 'right' : 'down'}`} />
 					</button>
 				)}
 				<button
@@ -184,7 +192,7 @@ function InlineSnippet({ inline, canEdit }: { inline: InlineAnchor; canEdit: boo
 						title={done ? 'Marked done' : 'Not done'}
 						aria-label={done ? 'Marked done' : 'Not done'}
 					>
-						{done ? '✓' : '○'}
+						<i className={`codicon codicon-${done ? 'check' : 'circle-large-outline'}`} />
 					</span>
 				)}
 			</div>
@@ -389,7 +397,7 @@ export function App() {
 							onClick={() => request('openLando')}
 							title={`Open ${payload.monogram} in Lando`}
 						>
-							<i className="codicon codicon-link-external" />
+							<span className="codicon-link">↗</span>
 							<span>View in Lando</span>
 						</button>
 					</div>
@@ -402,7 +410,7 @@ export function App() {
 							onClick={() => submit('accept')}
 							title="Accept this revision (publishes any draft inline comments)"
 						>
-							<span className="action-icon">✓</span>
+							<span className="action-icon"><i className="codicon codicon-check" /></span>
 							<span>Accept</span>
 						</button>
 						<button
@@ -411,7 +419,7 @@ export function App() {
 							onClick={() => submit('requestChanges')}
 							title="Block on changes (requires a comment)"
 						>
-							<span className="action-icon">!</span>
+							<span className="action-icon"><i className="codicon codicon-warning" /></span>
 							<span>Request changes</span>
 						</button>
 
@@ -423,7 +431,7 @@ export function App() {
 									onClick={() => submitDestructive('abandon')}
 									title="Mark this revision as abandoned (you can reclaim later)"
 								>
-									<span className="action-icon">✕</span>
+									<span className="action-icon"><i className="codicon codicon-close" /></span>
 									<span>Abandon…</span>
 								</button>
 							)}
@@ -434,7 +442,7 @@ export function App() {
 									onClick={() => submitDestructive('commandeer')}
 									title="Take ownership of this revision from its current author"
 								>
-									<span className="action-icon">⇄</span>
+									<span className="action-icon"><i className="codicon codicon-arrow-swap" /></span>
 									<span>Commandeer…</span>
 								</button>
 							)}
@@ -445,7 +453,7 @@ export function App() {
 									onClick={() => submitDestructive('resign')}
 									title="Remove yourself as a reviewer on this revision"
 								>
-									<span className="action-icon">↩</span>
+									<span className="action-icon"><i className="codicon codicon-discard" /></span>
 									<span>Resign…</span>
 								</button>
 							)}
@@ -461,7 +469,7 @@ export function App() {
 								{payload.reviewers.map((r) => (
 									<li key={r.phid} className={`reviewer reviewer-state-${r.status}`}>
 										<span className="reviewer-state" aria-label={r.status}>
-											{REVIEWER_STATE_ICON[r.status] || '•'}
+											<i className={`codicon codicon-${REVIEWER_STATE_ICON[r.status] || 'circle'}`} />
 										</span>
 										<span className="reviewer-name">
 											{r.isProject ? '#' : ''}
@@ -500,7 +508,7 @@ export function App() {
 								return (
 									<li key={f.path} className={`file-row file-status-${f.status}`} title={f.path}>
 										<span className="file-status" aria-label={f.status}>
-											{f.status[0].toUpperCase()}
+											<i className={`codicon codicon-${FILE_STATUS_ICON[f.status] || 'diff-modified'}`} />
 										</span>
 										<span className="file-name">{name}</span>
 										{dir && <span className="file-dir">{dir}</span>}

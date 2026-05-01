@@ -60,7 +60,12 @@ body {
 	display: flex; align-items: center; gap: 8px;
 	padding: 4px 0; font-size: 0.95em;
 }
-.reviewer-state { width: 18px; text-align: center; opacity: 0.85; font-weight: 600; }
+.reviewer-state {
+	width: 18px; height: 18px;
+	display: inline-flex; align-items: center; justify-content: center;
+	opacity: 0.85;
+}
+.reviewer-state .codicon { font-size: 14px; }
 .reviewer-state-accepted .reviewer-state, .reviewer-state-accepted-prior .reviewer-state { color: var(--vscode-charts-green); }
 .reviewer-state-rejected .reviewer-state, .reviewer-state-blocking .reviewer-state { color: var(--vscode-errorForeground); }
 .reviewer-state-resigned .reviewer-state { opacity: 0.5; }
@@ -92,9 +97,8 @@ body {
 	width: 18px; height: 18px;
 	display: inline-flex; align-items: center; justify-content: center;
 	border-radius: 3px;
-	font-weight: 700; font-size: 0.85em;
-	font-family: var(--vscode-editor-font-family);
 }
+.file-status .codicon { font-size: 14px; }
 .file-name {
 	font-family: var(--vscode-editor-font-family);
 	overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -172,6 +176,12 @@ body {
 .open-in-browser:hover { background: var(--vscode-list-hoverBackground); border-color: var(--vscode-focusBorder); }
 .open-in-browser .codicon {
 	font-size: 14px; line-height: 1;
+	color: var(--vscode-textLink-foreground);
+}
+.open-in-browser .codicon-link {
+	display: inline-flex; align-items: center; justify-content: center;
+	width: 16px; height: 16px;
+	font-size: 0.95em;
 	color: var(--vscode-textLink-foreground);
 }
 
@@ -336,6 +346,7 @@ body {
 	font-size: 0.85em; font-weight: 600;
 	background: rgba(255, 255, 255, 0.12);
 }
+.action-icon .codicon { font-size: 12px; }
 .action-primary {
 	background: var(--vscode-button-background);
 	color: var(--vscode-button-foreground);
