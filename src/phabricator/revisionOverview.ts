@@ -1,11 +1,10 @@
 import * as vscode from 'vscode';
 import { execFile } from 'child_process';
 import { randomBytes } from 'crypto';
-import type { Changeset } from '../client';
+import type { Changeset, Transaction } from '../client';
 import { WebviewBase, REVISION_OVERVIEW_VIEW_TYPE, IRequestMessage } from '../common/webview';
 import { RevisionsManager } from './revisionsManager';
 import { RevisionModel } from './revisionModel';
-import type { Transaction } from './interface';
 import { changesetStatus } from '../view/treeNodes/fileChangeNode';
 import { flexibleBool } from '../common/flexibleBool';
 import Logger from '../common/logger';

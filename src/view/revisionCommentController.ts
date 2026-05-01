@@ -5,7 +5,7 @@ import { flexibleBool } from '../common/flexibleBool';
 import Logger from '../common/logger';
 import { RevisionsManager } from '../phabricator/revisionsManager';
 import { RevisionModel } from '../phabricator/revisionModel';
-import type { Transaction } from '../phabricator/interface';
+import type { Transaction } from '../client';
 import { changesetStatus } from './treeNodes/fileChangeNode';
 
 interface InlineFields {

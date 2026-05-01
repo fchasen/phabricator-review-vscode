@@ -1,5 +1,5 @@
 import { PhabricatorClient } from '../client';
-import type { Project, User } from './interface';
+import type { Project, User } from '../client';
 
 /**
  * Caches resolved user/project PHIDs and batches resolution calls.

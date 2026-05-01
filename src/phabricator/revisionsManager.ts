@@ -5,8 +5,7 @@ import Logger, { REVISION_TREE } from '../common/logger';
 import { UserResolver } from './userResolver';
 import { RevisionModel } from './revisionModel';
 import { LocalGitResolver } from './localGitResolver';
-import type { Revision } from './interface';
-import type { RevisionStatus } from '../client';
+import type { Revision, RevisionStatus } from '../client';
 
 export type CategoryKey = 'mine' | 'reviewer' | 'subscriber' | 'closed';
 
