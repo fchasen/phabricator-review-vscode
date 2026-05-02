@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type KeyboardEvent } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { ready, subscribe, request } from '../common/message';
 import { Remarkup } from '../common/remarkup';
 import { transactionLabel } from '../common/txLabels';
@@ -565,6 +565,180 @@ function FileChange({ file, commentPhidToTxId, openReply, onShowInActivity }: Fi
 	);
 }
 
+function EditableTitle({ title, canEdit }: { title: string; canEdit: boolean }) {
+	const [editing, setEditing] = useState(false);
+	const [value, setValue] = useState(title);
+	const [busy, setBusy] = useState(false);
+	const inputRef = useRef<HTMLInputElement>(null);
+	const savedRef = useRef(false);
+
+	useEffect(() => {
+		if (!editing) setValue(title);
+	}, [title, editing]);
+
+	useEffect(() => {
+		if (editing && inputRef.current) {
+			inputRef.current.focus();
+			inputRef.current.select();
+		}
+	}, [editing]);
+
+	const begin = () => {
+		savedRef.current = false;
+		setValue(title);
+		setEditing(true);
+	};
+	const cancel = () => {
+		savedRef.current = true;
+		setEditing(false);
+	};
+	const save = async () => {
+		if (savedRef.current) return;
+		const trimmed = value.trim();
+		if (trimmed.length === 0 || trimmed === title) {
+			cancel();
+			return;
+		}
+		savedRef.current = true;
+		setBusy(true);
+		try {
+			const ok = await request<boolean>('editRevision', { title: trimmed });
+			if (ok) setEditing(false);
+			else savedRef.current = false;
+		} finally {
+			setBusy(false);
+		}
+	};
+
+	if (!editing) {
+		return (
+			<div className="title-row">
+				<h1>{title}</h1>
+				{canEdit && (
+					<button
+						type="button"
+						className="title-edit-button"
+						title="Edit title"
+						aria-label="Edit title"
+						onClick={begin}
+					>
+						<i className="codicon codicon-edit" />
+					</button>
+				)}
+			</div>
+		);
+	}
+
+	return (
+		<div className="title-row title-row-editing">
+			<input
+				ref={inputRef}
+				type="text"
+				className="title-edit-input"
+				value={value}
+				disabled={busy}
+				onChange={(e) => setValue(e.target.value)}
+				onKeyDown={(e) => {
+					if (e.key === 'Enter') {
+						e.preventDefault();
+						void save();
+					} else if (e.key === 'Escape') {
+						e.preventDefault();
+						cancel();
+					}
+				}}
+				onBlur={() => void save()}
+			/>
+		</div>
+	);
+}
+
+function EditableSummary({
+	summary,
+	summaryHtml,
+	canEdit,
+}: {
+	summary: string;
+	summaryHtml: string;
+	canEdit: boolean;
+}) {
+	const [editing, setEditing] = useState(false);
+	const [draft, setDraft] = useState(summary);
+	const [busy, setBusy] = useState(false);
+
+	useEffect(() => {
+		if (!editing) setDraft(summary);
+	}, [summary, editing]);
+
+	const begin = () => {
+		setDraft(summary);
+		setEditing(true);
+	};
+	const cancel = () => setEditing(false);
+	const save = async () => {
+		if (draft === summary) {
+			cancel();
+			return;
+		}
+		setBusy(true);
+		try {
+			const ok = await request<boolean>('editRevision', { summary: draft });
+			if (ok) setEditing(false);
+		} finally {
+			setBusy(false);
+		}
+	};
+
+	if (!summary && !canEdit) return null;
+
+	return (
+		<section className="summary">
+			<div className="section-head">
+				<h2>Summary</h2>
+				{canEdit && !editing && (
+					<button
+						type="button"
+						className="link-button summary-edit-button"
+						title="Edit summary"
+						onClick={begin}
+					>
+						{summary ? 'Edit' : 'Add summary'}
+					</button>
+				)}
+			</div>
+			{editing ? (
+				<>
+					<Suspense fallback={<div className="composer-loading">Loading editor…</div>}>
+						<RemarkupComposer initialValue={summary} onChange={setDraft} disabled={busy} />
+					</Suspense>
+					<div className="summary-edit-actions">
+						<button
+							type="button"
+							className="action action-secondary"
+							disabled={busy || draft === summary}
+							onClick={save}
+						>
+							<span>Save</span>
+						</button>
+						<button
+							type="button"
+							className="action action-link"
+							disabled={busy}
+							onClick={cancel}
+						>
+							<span>Cancel</span>
+						</button>
+					</div>
+				</>
+			) : summary ? (
+				<Remarkup html={summaryHtml} source={summary} />
+			) : (
+				<p className="summary-empty muted">No summary yet.</p>
+			)}
+		</section>
+	);
+}
+
 export function App() {
 	const [payload, setPayload] = useState<OverviewPayload | undefined>();
 	const [comment, setComment] = useState('');
@@ -656,7 +830,7 @@ export function App() {
 			<div className="grid">
 				<main className="main-col">
 					<header className="overview-header">
-						<h1>{payload.title}</h1>
+						<EditableTitle title={payload.title} canEdit={payload.isAuthor} />
 						<div className="status">
 							<span className={`badge status-${payload.statusValue}`}>{payload.statusName}</span>
 							<span className="monogram">
@@ -678,12 +852,11 @@ export function App() {
 							)}
 						</div>
 					</header>
-					{payload.summary && (
-						<section className="summary">
-							<h2>Summary</h2>
-							<Remarkup html={payload.summaryHtml} source={payload.summary} />
-						</section>
-					)}
+					<EditableSummary
+						summary={payload.summary}
+						summaryHtml={payload.summaryHtml}
+						canEdit={payload.isAuthor}
+					/>
 
 					{payload.testPlan && (
 						<section className="test-plan">

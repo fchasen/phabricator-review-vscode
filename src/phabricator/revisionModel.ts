@@ -321,6 +321,18 @@ export class RevisionModel {
 		await this.refresh();
 	}
 
+	public async editFields(fields: { title?: string; summary?: string }): Promise<void> {
+		const transactions: Array<{ type: string; value: unknown }> = [];
+		if (fields.title !== undefined) transactions.push({ type: 'title', value: fields.title });
+		if (fields.summary !== undefined) transactions.push({ type: 'summary', value: fields.summary });
+		if (transactions.length === 0) return;
+		await this._client.editRevision({
+			objectIdentifier: this._revision.phid,
+			transactions,
+		});
+		await this.refresh();
+	}
+
 	/**
 	 * Re-fetch this revision from Conduit and replace local state.
 	 */

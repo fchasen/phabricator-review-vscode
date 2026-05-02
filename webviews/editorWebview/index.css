@@ -57,6 +57,64 @@ body {
 
 .summary, .test-plan { padding: 0; }
 
+.title-row { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; min-width: 0; }
+.title-row h1 { flex: 1; min-width: 0; }
+.title-row .title-edit-button {
+	flex: none;
+	display: inline-flex; align-items: center; justify-content: center;
+	width: 24px; height: 24px;
+	background: transparent;
+	color: var(--vscode-foreground);
+	border: 1px solid transparent;
+	border-radius: 3px;
+	cursor: pointer;
+	padding: 0;
+	font: inherit;
+	opacity: 0;
+}
+.title-row:hover .title-edit-button,
+.title-row:focus-within .title-edit-button { opacity: 0.85; }
+.title-row .title-edit-button:hover { background: var(--vscode-toolbar-hoverBackground, rgba(127,127,127,0.15)); opacity: 1; }
+.title-row .title-edit-button .codicon { font-size: 14px; }
+
+.title-edit-input {
+	flex: 1; min-width: 0;
+	font: inherit;
+	font-size: 1.4em;
+	font-weight: 600;
+	color: inherit;
+	background: var(--vscode-input-background);
+	border: 1px solid var(--vscode-input-border, var(--vscode-focusBorder));
+	border-radius: 3px;
+	padding: 4px 8px;
+	width: 100%;
+}
+.title-edit-input:focus {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: 0;
+}
+
+.summary .summary-edit-button { font-size: 0.85em; }
+.summary-edit-actions {
+	display: flex; gap: 8px; margin-top: 8px;
+}
+.summary-edit-actions .action-link {
+	background: transparent; border: 1px solid transparent;
+	color: var(--vscode-textLink-foreground);
+	cursor: pointer;
+	padding: 4px 8px;
+}
+.summary-edit-actions .action-link:hover {
+	color: var(--vscode-textLink-activeForeground);
+	text-decoration: underline;
+}
+.summary-edit-actions .action-link:disabled {
+	color: var(--vscode-disabledForeground);
+	cursor: default;
+	text-decoration: none;
+}
+.summary-empty { font-style: italic; }
+
 /* Sidebar */
 .reviewers li {
 	display: flex; align-items: center; gap: 8px;

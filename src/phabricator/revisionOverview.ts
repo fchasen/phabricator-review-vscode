@@ -142,7 +142,10 @@ export class RevisionOverviewPanel extends WebviewBase {
 			RevisionOverviewPanel._byPhid.delete(_model.phid);
 			this.dispose();
 		}));
-		this._register(this._model.onDidChange(() => this._refresh()));
+		this._register(this._model.onDidChange(() => {
+			this._panel.title = `${this._model.monogram}: ${this._model.title}`;
+			this._refresh();
+		}));
 	}
 
 	protected async _onDidReceiveMessage(message: IRequestMessage<any>): Promise<any> {
@@ -259,6 +262,15 @@ export class RevisionOverviewPanel extends WebviewBase {
 			case 'editProjects': {
 				try {
 					await vscode.commands.executeCommand('phabricator.editProjects', this._model.phid);
+					return this._replyMessage(message, true);
+				} catch (err) {
+					return this._throwError(message, err instanceof Error ? err.message : String(err));
+				}
+			}
+			case 'editRevision': {
+				const args = (message.args || {}) as { title?: string; summary?: string };
+				try {
+					await this._model.editFields(args);
 					return this._replyMessage(message, true);
 				} catch (err) {
 					return this._throwError(message, err instanceof Error ? err.message : String(err));

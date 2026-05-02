@@ -5,6 +5,7 @@ import { keymap } from 'prosemirror-keymap';
 import { history, undo, redo } from 'prosemirror-history';
 import { baseKeymap, toggleMark, wrapIn, chainCommands, exitCode } from 'prosemirror-commands';
 import { splitListItem, liftListItem, sinkListItem } from 'prosemirror-schema-list';
+import type { Node as PMNode } from 'prosemirror-model';
 
 import { remarkupSchema } from './remarkupSchema';
 import { pmDocToRemarkup } from './remarkupSerialize';
@@ -15,6 +16,20 @@ interface Props {
 	onChange?: (text: string) => void;
 	disabled?: boolean;
 	placeholder?: string;
+	initialValue?: string;
+}
+
+function buildInitialDoc(text: string): PMNode {
+	const paragraphs = text.split('\n\n').map((para) => {
+		const lines = para.split('\n');
+		const content: PMNode[] = [];
+		lines.forEach((line, i) => {
+			if (i > 0) content.push(remarkupSchema.nodes.hard_break.create());
+			if (line.length > 0) content.push(remarkupSchema.text(line));
+		});
+		return remarkupSchema.nodes.paragraph.create(null, content);
+	});
+	return remarkupSchema.nodes.doc.create(null, paragraphs);
 }
 
 const AUTOCOMPLETE_DEBOUNCE_MS = 200;
@@ -112,9 +127,10 @@ function buildKeymap() {
 	return km;
 }
 
-export function RemarkupComposer({ onChange, disabled, placeholder }: Props) {
+export function RemarkupComposer({ onChange, disabled, placeholder, initialValue }: Props) {
 	const editorRef = useRef<HTMLDivElement>(null);
 	const viewRef = useRef<EditorView | null>(null);
+	const initialValueRef = useRef(initialValue);
 	const [, forceRender] = useState(0);
 	const [autocomplete, setAutocomplete] = useState<AutocompleteState | null>(null);
 	const autocompleteRef = useRef<AutocompleteState | null>(null);
@@ -140,8 +156,10 @@ export function RemarkupComposer({ onChange, disabled, placeholder }: Props) {
 
 	useEffect(() => {
 		if (!editorRef.current) return;
+		const seed = initialValueRef.current;
 		const state = EditorState.create({
 			schema: remarkupSchema,
+			doc: seed ? buildInitialDoc(seed) : undefined,
 			plugins: [history(), keymap(buildKeymap()), keymap(baseKeymap)],
 		});
 		const view = new EditorView(editorRef.current, {
