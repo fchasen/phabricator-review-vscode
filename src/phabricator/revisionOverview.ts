@@ -38,7 +38,27 @@ interface OverviewPayload {
 	projects: Array<{ phid: string; displayName: string }>;
 	files: Array<{
 		path: string;
+		oldPath: string | null;
 		status: string;
+		unifiedDiff: string;
+		oldContents: string;
+		newContents: string;
+		isBinary: boolean;
+		addLines: number;
+		delLines: number;
+		inlineComments: Array<{
+			commentPHID: string;
+			line: number;
+			length: number;
+			isNewFile: boolean;
+			isOutdated: boolean;
+			isDone: boolean;
+			authorName: string;
+			authorPHID: string;
+			dateCreated: number;
+			content: string;
+			contentHtml: string;
+		}>;
 	}>;
 	timeline: Array<{
 		id: string;
@@ -174,6 +194,23 @@ export class RevisionOverviewPanel extends WebviewBase {
 				} catch (err) {
 					return this._throwError(message, err instanceof Error ? err.message : String(err));
 				}
+			}
+			case 'openFileDiff': {
+				const args = message.args as { path?: string; status?: string } | undefined;
+				if (!args?.path) {
+					return this._replyMessage(message, false);
+				}
+				await vscode.commands.executeCommand('phabricator.revealInlineComment', {
+					revisionId: this._model.id,
+					revisionPHID: this._model.phid,
+					diffPHID: this._model.revision.fields.diffPHID,
+					path: args.path,
+					line: 1,
+					length: 0,
+					isNewFile: true,
+					status: (args.status as 'added' | 'removed' | 'modified' | 'renamed' | 'copied' | undefined) || 'modified',
+				});
+				return this._replyMessage(message, true);
 			}
 			case 'revealInlineComment': {
 				const inline = message.args as InlineLink | undefined;
@@ -363,6 +400,47 @@ export class RevisionOverviewPanel extends WebviewBase {
 			commentHtmlByPHID.set(slot.phid, renderedHtml[slot.htmlIdx] || '');
 		}
 
+		type FileInlineComment = OverviewPayload['files'][number]['inlineComments'][number];
+		type InlineFields = {
+			path?: string;
+			diff?: { phid?: string };
+			diffPHID?: string;
+			line?: number;
+			length?: number;
+			isNewFile?: unknown;
+			isDone?: unknown;
+		};
+
+		const inlineByPath = new Map<string, FileInlineComment[]>();
+		for (const t of transactions) {
+			const fields = t.fields as InlineFields;
+			if (!fields?.path || fields.line === undefined) continue;
+			const diffPHID = fields.diffPHID || fields.diff?.phid;
+			if (!diffPHID) continue;
+			const isOutdated = !!activeDiffPHID && diffPHID !== activeDiffPHID;
+			const isNewFile = flexibleBool(fields.isNewFile, true);
+			const isDone = flexibleBool(fields.isDone, false);
+			const visibleComments = (t.comments || []).filter((c) => !c.removed);
+			if (visibleComments.length === 0) continue;
+			const list = inlineByPath.get(fields.path) || [];
+			for (const c of visibleComments) {
+				list.push({
+					commentPHID: c.phid,
+					line: fields.line,
+					length: fields.length || 0,
+					isNewFile,
+					isOutdated,
+					isDone,
+					authorName: resolver?.displayName(t.authorPHID) || t.authorPHID,
+					authorPHID: t.authorPHID,
+					dateCreated: c.dateCreated,
+					content: c.content.raw,
+					contentHtml: commentHtmlByPHID.get(c.phid) || '',
+				});
+			}
+			inlineByPath.set(fields.path, list);
+		}
+
 		return {
 			id: revision.id,
 			monogram: this._model.monogram,
@@ -393,10 +471,29 @@ export class RevisionOverviewPanel extends WebviewBase {
 				phid,
 				displayName: resolver?.displayName(phid) || phid,
 			})),
-			files: changesets.map((cs) => ({
-				path: cs.currentPath || cs.oldPath || '',
-				status: changesetStatus(cs.type),
-			})),
+			files: changesets.map((cs) => {
+				const newPath = cs.currentPath || cs.oldPath || '';
+				const oldPath = cs.oldPath || cs.currentPath || null;
+				const isBinary = isBinaryChangeset(cs);
+				const oldContents = isBinary ? '' : this._model.synthesizeContent(cs, 'before');
+				const newContents = isBinary ? '' : this._model.synthesizeContent(cs, 'after');
+				const inlineComments: FileInlineComment[] = [
+					...(inlineByPath.get(newPath) || []),
+					...(oldPath && oldPath !== newPath ? inlineByPath.get(oldPath) || [] : []),
+				].sort((a, b) => a.dateCreated - b.dateCreated);
+				return {
+					path: newPath,
+					oldPath,
+					status: changesetStatus(cs.type),
+					unifiedDiff: buildUnifiedDiff(cs),
+					oldContents,
+					newContents,
+					isBinary,
+					addLines: cs.addLines || 0,
+					delLines: cs.delLines || 0,
+					inlineComments,
+				};
+			}),
 			timeline: transactions.map((t: Transaction) => ({
 				id: t.id,
 				type: t.type,
@@ -520,6 +617,52 @@ function buildInlineSnippet(
 	const start = Math.max(0, anchorIdx - SNIPPET_CONTEXT_LINES);
 	const end = Math.min(flat.length, endIdx + SNIPPET_CONTEXT_LINES + 1);
 	return flat.slice(start, end);
+}
+
+// Phabricator changeset types from differential.querydiffs.
+const CS_TYPE_ADD = 1;
+const CS_TYPE_DELETE = 3;
+const CS_TYPE_MOVE_HERE = 6;
+const CS_TYPE_COPY_HERE = 7;
+
+function isBinaryChangeset(cs: Changeset): boolean {
+	// 2=image, 3=binary
+	return cs.fileType === 2 || cs.fileType === 3 || cs.oldFileType === 2 || cs.oldFileType === 3;
+}
+
+function buildUnifiedDiff(cs: Changeset): string {
+	if (cs.hunks.length === 0) return '';
+	const isAdd = cs.type === CS_TYPE_ADD;
+	const isDelete = cs.type === CS_TYPE_DELETE;
+	const isRename = cs.type === CS_TYPE_MOVE_HERE;
+	const isCopy = cs.type === CS_TYPE_COPY_HERE;
+	const newPath = cs.currentPath || cs.oldPath || 'unknown';
+	const oldPath = cs.oldPath || cs.currentPath || 'unknown';
+	const lines: string[] = [];
+	lines.push(`diff --git a/${oldPath} b/${newPath}`);
+	if (isAdd) {
+		lines.push('new file mode 100644');
+	} else if (isDelete) {
+		lines.push('deleted file mode 100644');
+	} else if (isRename) {
+		lines.push(`rename from ${oldPath}`);
+		lines.push(`rename to ${newPath}`);
+	} else if (isCopy) {
+		lines.push(`copy from ${oldPath}`);
+		lines.push(`copy to ${newPath}`);
+	}
+	lines.push(`--- ${isAdd ? '/dev/null' : `a/${oldPath}`}`);
+	lines.push(`+++ ${isDelete ? '/dev/null' : `b/${newPath}`}`);
+	for (const hunk of cs.hunks) {
+		const oldLen = hunk.oldLength;
+		const newLen = hunk.newLength;
+		const oldStart = oldLen === 0 ? 0 : hunk.oldOffset;
+		const newStart = newLen === 0 ? 0 : hunk.newOffset;
+		lines.push(`@@ -${oldStart},${oldLen} +${newStart},${newLen} @@`);
+		const corpus = hunk.corpus.endsWith('\n') ? hunk.corpus.slice(0, -1) : hunk.corpus;
+		lines.push(corpus);
+	}
+	return lines.join('\n') + '\n';
 }
 
 function flattenChangesetCorpus(changeset: Changeset): SnippetLine[] {

@@ -1,4 +1,4 @@
-import { lazy, Suspense, type KeyboardEvent, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type KeyboardEvent } from 'react';
 import { ready, subscribe, request } from '../common/message';
 import { Remarkup } from '../common/remarkup';
 import { transactionLabel } from '../common/txLabels';
@@ -7,9 +7,64 @@ const RemarkupComposer = lazy(() =>
 	import('../common/remarkupComposer').then((m) => ({ default: m.RemarkupComposer })),
 );
 
+type PierreCore = typeof import('@pierre/diffs');
+type PierreReact = typeof import('@pierre/diffs/react');
+type PierreModule = { core: PierreCore; FileDiff: PierreReact['FileDiff'] };
+
+let pierrePromise: Promise<PierreModule> | null = null;
+function loadPierre(): Promise<PierreModule> {
+	if (!pierrePromise) {
+		pierrePromise = (async () => {
+			const [core, react] = await Promise.all([
+				import('@pierre/diffs'),
+				import('@pierre/diffs/react'),
+			]);
+			// Preload themes so Pierre's first render produces a populated header
+			// instead of an empty container while it lazily fetches them.
+			try {
+				await core.preloadHighlighter({
+					themes: ['pierre-dark', 'pierre-light'],
+					langs: [],
+				});
+			} catch {
+				/* highlighter is fine without preload, just slightly delayed */
+			}
+			return { core, FileDiff: react.FileDiff };
+		})();
+	}
+	return pierrePromise;
+}
+
 interface ProjectTag {
 	phid: string;
 	displayName: string;
+}
+
+interface FileInlineComment {
+	commentPHID: string;
+	line: number;
+	length: number;
+	isNewFile: boolean;
+	isOutdated: boolean;
+	isDone: boolean;
+	authorName: string;
+	authorPHID: string;
+	dateCreated: number;
+	content: string;
+	contentHtml: string;
+}
+
+interface FileEntry {
+	path: string;
+	oldPath: string | null;
+	status: string;
+	unifiedDiff: string;
+	oldContents: string;
+	newContents: string;
+	isBinary: boolean;
+	addLines: number;
+	delLines: number;
+	inlineComments: FileInlineComment[];
 }
 
 interface SnippetLine {
@@ -59,7 +114,7 @@ interface OverviewPayload {
 	testPlanHtml: string;
 	reviewers: Array<{ phid: string; displayName: string; isProject: boolean; status: string; isBlocking: boolean }>;
 	subscribers: string[];
-	files: Array<{ path: string; status: string }>;
+	files: FileEntry[];
 	projects: ProjectTag[];
 	timeline: TimelineEntry[];
 }
@@ -239,12 +294,208 @@ function isCommentLikeTx(tx: TimelineEntry): boolean {
 	return tx.comments && tx.comments.length > 0;
 }
 
+type ParsedFileDiff = import('@pierre/diffs').FileDiffMetadata;
+type DiffLineAnnotation = import('@pierre/diffs').DiffLineAnnotation<AnnotationMetadata>;
+interface AnnotationMetadata {
+	comment: FileInlineComment;
+	txId: string | null;
+	onShowInActivity: () => void;
+}
+
+function renderInlineAnnotation(annotation: DiffLineAnnotation) {
+	const { comment: c, txId, onShowInActivity } = annotation.metadata;
+	return (
+		<div
+			className={`pierre-annotation${c.isOutdated ? ' is-outdated' : ''}${c.isDone ? ' is-done' : ''}`}
+		>
+			<div className="pierre-annotation-head">
+				<Avatar phid={c.authorPHID} name={c.authorName} size={22} />
+				<strong>{c.authorName}</strong>
+				<time>{new Date(c.dateCreated * 1000).toLocaleString()}</time>
+				{c.isOutdated && <span className="badge">Outdated</span>}
+				{c.isDone && <span className="badge">Done</span>}
+			</div>
+			<Remarkup html={c.contentHtml} source={c.content} />
+			{txId && (
+				<div className="pierre-annotation-actions">
+					<button type="button" className="annotation-action" onClick={onShowInActivity}>
+						<i className="codicon codicon-history" />
+						<span>Show in activity</span>
+					</button>
+				</div>
+			)}
+		</div>
+	);
+}
+
+function buildLineAnnotations(
+	comments: FileInlineComment[],
+	commentPhidToTxId: Map<string, string>,
+	onShowInActivity: (txId: string) => void,
+): DiffLineAnnotation[] {
+	return comments.map((c) => {
+		const txId = commentPhidToTxId.get(c.commentPHID) || null;
+		return {
+			side: c.isNewFile ? 'additions' : 'deletions',
+			lineNumber: c.line,
+			metadata: {
+				comment: c,
+				txId,
+				onShowInActivity: () => txId && onShowInActivity(txId),
+			},
+		};
+	});
+}
+
+interface FileChangeProps {
+	file: FileEntry;
+	commentPhidToTxId: Map<string, string>;
+	onShowInActivity: (txId: string) => void;
+}
+
+function FileChange({ file, commentPhidToTxId, onShowInActivity }: FileChangeProps) {
+	const [expanded, setExpanded] = useState(false);
+	const [pierre, setPierre] = useState<PierreModule | null>(null);
+	const [parsed, setParsed] = useState<ParsedFileDiff | null>(null);
+	const [parseError, setParseError] = useState<string | null>(null);
+	const isParseable = !file.isBinary && file.unifiedDiff.length > 0;
+
+	useEffect(() => {
+		if (!isParseable || parsed || parseError) return;
+		let cancelled = false;
+		loadPierre()
+			.then((m) => {
+				if (cancelled) return;
+				const trimmed = m.core.trimPatchContext(file.unifiedDiff, 10);
+				const result = m.core.processFile(trimmed, {
+					oldFile: { name: file.oldPath || file.path, contents: file.oldContents },
+					newFile: { name: file.path, contents: file.newContents },
+				});
+				if (!result) {
+					setParseError('Could not parse diff.');
+					return;
+				}
+				setPierre(m);
+				setParsed(result);
+			})
+			.catch((err) => {
+				if (cancelled) return;
+				setParseError(err instanceof Error ? err.message : String(err));
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [isParseable, parsed, parseError, file.unifiedDiff, file.oldContents, file.newContents, file.oldPath, file.path]);
+
+	const lineAnnotations = useMemo(
+		() => buildLineAnnotations(
+			file.inlineComments,
+			commentPhidToTxId,
+			onShowInActivity,
+		),
+		[file.inlineComments, commentPhidToTxId, onShowInActivity],
+	);
+
+	const renderHeaderPrefix = useCallback(
+		() => (
+			<button
+				type="button"
+				className="pierre-chevron"
+				aria-label={expanded ? 'Collapse file' : 'Expand file'}
+				aria-expanded={expanded}
+				onClick={() => setExpanded((v) => !v)}
+			>
+				<i className={`codicon codicon-chevron-${expanded ? 'down' : 'right'}`} />
+			</button>
+		),
+		[expanded],
+	);
+
+	const openInEditor = useCallback(
+		() => request('openFileDiff', { path: file.path, status: file.status }),
+		[file.path, file.status],
+	);
+
+	const renderHeaderMetadata = useCallback(
+		() => (
+			<>
+				{file.inlineComments.length > 0 && (
+					<span className="pierre-comment-badge" title={`${file.inlineComments.length} inline comments`}>
+						<i className="codicon codicon-comment" />
+						{file.inlineComments.length}
+					</span>
+				)}
+				<button
+					type="button"
+					className="pierre-open-button"
+					title="Open in editor"
+					aria-label="Open in editor"
+					onClick={openInEditor}
+				>
+					<i className="codicon codicon-link-external" />
+				</button>
+			</>
+		),
+		[file.inlineComments.length, openInEditor],
+	);
+
+	if (file.isBinary) {
+		const { name } = splitFilePath(file.path);
+		return (
+			<li className="file-row file-row-static">
+				<span className="file-status" aria-label={file.status}>
+					<i className={`codicon codicon-${FILE_STATUS_ICON[file.status] || 'diff-modified'}`} />
+				</span>
+				<span className="file-name">{name}</span>
+				<span className="muted">Binary file not shown.</span>
+			</li>
+		);
+	}
+
+	if (parseError) {
+		return (
+			<li className="file-row file-row-static">
+				<span className="file-name">{file.path}</span>
+				<span className="muted">Failed to load diff: {parseError}</span>
+			</li>
+		);
+	}
+
+	if (!parsed || !pierre) {
+		return (
+			<li className="file-row file-row-static">
+				<span className="file-name">{file.path}</span>
+				<span className="muted">Loading diff…</span>
+			</li>
+		);
+	}
+
+	const FileDiff = pierre.FileDiff;
+	return (
+		<li className="file-row">
+			<FileDiff
+				fileDiff={parsed}
+				disableWorkerPool
+				options={{
+					themeType: 'system',
+					diffStyle: 'unified',
+					preferredHighlighter: 'shiki-js',
+					collapsed: !expanded,
+				}}
+				lineAnnotations={lineAnnotations}
+				renderAnnotation={renderInlineAnnotation}
+				renderHeaderPrefix={renderHeaderPrefix}
+				renderHeaderMetadata={renderHeaderMetadata}
+			/>
+		</li>
+	);
+}
+
 export function App() {
 	const [payload, setPayload] = useState<OverviewPayload | undefined>();
 	const [comment, setComment] = useState('');
 	const [busy, setBusy] = useState(false);
 	const [commentsOnly, setCommentsOnly] = useState(true);
-
 	useEffect(() => {
 		const dispose = subscribe((message) => {
 			if (message?.res?.command === 'overview') {
@@ -259,6 +510,25 @@ export function App() {
 		if (!payload) return [];
 		return commentsOnly ? payload.timeline.filter(isCommentLikeTx) : payload.timeline;
 	}, [payload, commentsOnly]);
+
+	const commentPhidToTxId = useMemo(() => {
+		const map = new Map<string, string>();
+		for (const tx of payload?.timeline || []) {
+			for (const c of tx.comments) {
+				map.set(c.phid, tx.id);
+			}
+		}
+		return map;
+	}, [payload]);
+
+	const handleShowInActivity = useCallback((txId: string) => {
+		const node = document.getElementById(`tx-${txId}`);
+		if (node) {
+			node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+			node.classList.add('tx-flash');
+			setTimeout(() => node.classList.remove('tx-flash'), 1200);
+		}
+	}, []);
 
 	if (!payload) {
 		return <div className="loading">Loading…</div>;
@@ -350,7 +620,11 @@ export function App() {
 								{visibleTimeline.map((tx) => {
 									const isComment = isCommentLikeTx(tx);
 									return (
-										<li key={tx.id} className={`tx tx-${String(tx.type || 'unknown').replace(/[.:]/g, '-')}`}>
+										<li
+											key={tx.id}
+											id={`tx-${tx.id}`}
+											className={`tx tx-${String(tx.type || 'unknown').replace(/[.:]/g, '-')}`}
+										>
 											<header>
 												{isComment && <Avatar phid={tx.authorPHID} name={tx.authorName} size={28} />}
 												<strong>{tx.authorName}</strong>
@@ -369,7 +643,7 @@ export function App() {
 					</section>
 
 					<section className="composer">
-						<h2>Reply</h2>
+						<h2>Comment</h2>
 						<Suspense fallback={<div className="composer-loading">Loading editor…</div>}>
 							<RemarkupComposer onChange={setComment} disabled={busy} />
 						</Suspense>
@@ -384,6 +658,24 @@ export function App() {
 								<span>Comment</span>
 							</button>
 						</div>
+					</section>
+
+					<section className="files-main">
+						<h2>Files ({payload.files.length})</h2>
+						{payload.files.length === 0 ? (
+							<p className="muted">No file changes.</p>
+						) : (
+							<ul>
+								{payload.files.map((f) => (
+									<FileChange
+										key={f.path}
+										file={f}
+										commentPhidToTxId={commentPhidToTxId}
+										onShowInActivity={handleShowInActivity}
+									/>
+								))}
+							</ul>
+						)}
 					</section>
 				</main>
 
@@ -505,23 +797,6 @@ export function App() {
 						)}
 					</section>
 
-					<section className="files">
-						<h3>Files ({payload.files.length})</h3>
-						<ul>
-							{payload.files.map((f) => {
-								const { dir, name } = splitFilePath(f.path);
-								return (
-									<li key={f.path} className={`file-row file-status-${f.status}`} title={f.path}>
-										<span className="file-status" aria-label={f.status}>
-											<i className={`codicon codicon-${FILE_STATUS_ICON[f.status] || 'diff-modified'}`} />
-										</span>
-										<span className="file-name">{name}</span>
-										{dir && <span className="file-dir">{dir}</span>}
-									</li>
-								);
-							})}
-						</ul>
-					</section>
 				</aside>
 			</div>
 		</div>

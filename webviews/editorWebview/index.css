@@ -74,28 +74,20 @@ body {
 .reviewer-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .reviewer-state-resigned .reviewer-name { opacity: 0.6; text-decoration: line-through; }
 
-.files ul {
+.files-main > ul {
 	display: flex; flex-direction: column;
+	gap: 12px;
+}
+.files-main li.file-row { min-width: 0; }
+.files-main li.file-row-static {
+	display: flex; align-items: center; gap: 8px;
+	padding: 8px 10px;
 	border: 1px solid var(--vscode-panel-border);
 	border-radius: 4px;
-	overflow: hidden;
+	font-size: 0.9em;
 }
-.files li.file-row {
-	display: grid;
-	grid-template-columns: 18px 1fr;
-	grid-template-rows: auto auto;
-	column-gap: 8px;
-	padding: 5px 8px;
-	font-size: 0.85em;
-	min-width: 0;
-	border-top: 1px solid var(--vscode-panel-border);
-}
-.files li.file-row:first-child { border-top: none; }
-.files li.file-row:hover { background: var(--vscode-list-hoverBackground); }
 
 .file-status {
-	grid-row: 1 / span 2;
-	align-self: center;
 	width: 18px; height: 18px;
 	display: inline-flex; align-items: center; justify-content: center;
 	border-radius: 3px;
@@ -106,14 +98,138 @@ body {
 	overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 	min-width: 0;
 }
-.file-dir {
+
+.files-main diffs-container {
+	display: block;
+	width: 100%;
+	border: 1px solid var(--vscode-panel-border);
+	border-radius: 4px;
+	overflow: hidden;
+	--diffs-light-bg: var(--vscode-editor-background);
+	--diffs-dark-bg: var(--vscode-editor-background);
+	--diffs-light: var(--vscode-editor-foreground);
+	--diffs-dark: var(--vscode-editor-foreground);
+	--diffs-font-family: var(--vscode-editor-font-family);
 	font-family: var(--vscode-editor-font-family);
-	font-size: 0.85em;
-	opacity: 0.55;
-	overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-	direction: rtl; text-align: left;
-	min-width: 0;
 }
+
+/* Chevron toggle injected into Pierre's header prefix slot */
+.pierre-chevron {
+	display: inline-flex; align-items: center; justify-content: center;
+	width: 22px; height: 22px;
+	background: transparent;
+	color: inherit;
+	border: 1px solid transparent;
+	border-radius: 3px;
+	cursor: pointer;
+	padding: 0;
+	font: inherit;
+}
+.pierre-chevron:hover { background: var(--vscode-toolbar-hoverBackground, rgba(127,127,127,0.15)); }
+.pierre-chevron:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: 0;
+}
+.pierre-chevron .codicon { font-size: 14px; }
+
+/* Comment-count badge injected into Pierre's header metadata slot */
+.pierre-comment-badge {
+	display: inline-flex; align-items: center; gap: 3px;
+	font-size: 0.85em;
+	padding: 1px 7px; border-radius: 999px;
+	background: var(--vscode-badge-background);
+	color: var(--vscode-badge-foreground);
+	margin-right: 6px;
+}
+.pierre-comment-badge .codicon { font-size: 12px; }
+
+/* Open-in-editor button injected into Pierre's header metadata slot */
+.pierre-open-button {
+	display: inline-flex; align-items: center; justify-content: center;
+	width: 22px; height: 22px;
+	background: transparent;
+	color: inherit;
+	border: 1px solid transparent;
+	border-radius: 3px;
+	cursor: pointer;
+	padding: 0;
+	font: inherit;
+}
+.pierre-open-button:hover { background: var(--vscode-toolbar-hoverBackground, rgba(127,127,127,0.15)); }
+.pierre-open-button:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: 0;
+}
+.pierre-open-button .codicon { font-size: 13px; color: var(--vscode-textLink-foreground); }
+
+/* Inline comment annotation rendered inside Pierre's diff viewer */
+.pierre-annotation {
+	margin: 4px 8px;
+	padding: 8px 10px;
+	border-left: 3px solid var(--vscode-textLink-foreground);
+	border-radius: 3px;
+	background: var(--vscode-editor-background);
+	box-shadow: 0 0 0 1px var(--vscode-panel-border);
+	font-family: var(--vscode-font-family);
+	font-size: 0.9em;
+	line-height: 1.4;
+	min-width: 0;
+	white-space: normal;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+.pierre-annotation.is-outdated { border-left-color: var(--vscode-descriptionForeground); opacity: 0.85; }
+.pierre-annotation.is-done { opacity: 0.65; }
+.pierre-annotation pre,
+.pierre-annotation code {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+.pierre-annotation-head {
+	display: flex; align-items: center; gap: 8px;
+	margin-bottom: 6px;
+	flex-wrap: wrap;
+}
+.pierre-annotation-head strong { font-weight: 600; }
+.pierre-annotation-head time { margin-left: auto; opacity: 0.6; font-size: 0.85em; }
+.pierre-annotation-head .badge {
+	font-size: 0.75em; padding: 1px 6px;
+	background: var(--vscode-badge-background);
+	color: var(--vscode-badge-foreground);
+}
+.pierre-annotation-actions {
+	display: flex; gap: 6px; flex-wrap: wrap;
+	margin-top: 8px;
+	padding-top: 8px;
+	border-top: 1px solid var(--vscode-panel-border);
+}
+.pierre-annotation-actions .annotation-action {
+	display: inline-flex; align-items: center; gap: 4px;
+	padding: 3px 8px;
+	border-radius: 3px;
+	border: 1px solid var(--vscode-panel-border);
+	background: transparent;
+	color: var(--vscode-foreground);
+	font: inherit;
+	font-size: 0.85em;
+	cursor: pointer;
+}
+.pierre-annotation-actions .annotation-action:hover {
+	background: var(--vscode-toolbar-hoverBackground, rgba(127,127,127,0.15));
+	border-color: var(--vscode-focusBorder);
+}
+.pierre-annotation-actions .codicon { font-size: 12px; }
+
+/* Brief highlight when scrolling to an activity entry */
+.timeline .tx-flash {
+	animation: tx-flash-pulse 1.2s ease-out;
+}
+@keyframes tx-flash-pulse {
+	0%   { box-shadow: 0 0 0 2px var(--vscode-focusBorder); }
+	100% { box-shadow: 0 0 0 0 transparent; }
+}
+
 
 .file-status-added .file-status {
 	color: var(--vscode-gitDecoration-addedResourceForeground);
