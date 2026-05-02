@@ -221,6 +221,24 @@ body {
 }
 .pierre-annotation-actions .codicon { font-size: 12px; }
 
+/* Reply button on timeline inline entries */
+.timeline .tx > header .tx-reply-button {
+	display: inline-flex; align-items: center; gap: 4px;
+	padding: 2px 8px;
+	border-radius: 3px;
+	border: 1px solid var(--vscode-panel-border);
+	background: transparent;
+	color: var(--vscode-foreground);
+	font: inherit;
+	font-size: 0.85em;
+	cursor: pointer;
+}
+.timeline .tx > header .tx-reply-button:hover {
+	background: var(--vscode-toolbar-hoverBackground, rgba(127,127,127,0.15));
+	border-color: var(--vscode-focusBorder);
+}
+.timeline .tx > header .tx-reply-button .codicon { font-size: 12px; }
+
 /* Brief highlight when scrolling to an activity entry */
 .timeline .tx-flash {
 	animation: tx-flash-pulse 1.2s ease-out;
@@ -230,6 +248,31 @@ body {
 	100% { box-shadow: 0 0 0 0 transparent; }
 }
 
+/* Inline reply composer rendered inside an activity-feed entry */
+.inline-reply-composer {
+	margin-top: 10px;
+	padding-top: 10px;
+	border-top: 1px solid var(--vscode-panel-border);
+	display: flex; flex-direction: column; gap: 8px;
+}
+.inline-reply-actions {
+	display: flex; gap: 8px;
+}
+.inline-reply-actions .action-link {
+	background: transparent; border: 1px solid transparent;
+	color: var(--vscode-textLink-foreground);
+	cursor: pointer;
+	padding: 4px 8px;
+}
+.inline-reply-actions .action-link:hover {
+	color: var(--vscode-textLink-activeForeground);
+	text-decoration: underline;
+}
+.inline-reply-actions .action-link:disabled {
+	color: var(--vscode-disabledForeground);
+	cursor: default;
+	text-decoration: none;
+}
 
 .file-status-added .file-status {
 	color: var(--vscode-gitDecoration-addedResourceForeground);

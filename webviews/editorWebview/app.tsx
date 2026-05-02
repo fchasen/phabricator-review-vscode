@@ -105,6 +105,7 @@ interface OverviewPayload {
 	statusName: string;
 	statusValue: string;
 	authorName: string;
+	activeDiffPHID: string | null;
 	bug: string | null;
 	isAuthor: boolean;
 	isReviewer: boolean;
@@ -289,6 +290,68 @@ function splitFilePath(path: string): { dir: string; name: string } {
 	return { dir: path.slice(0, idx + 1), name: path.slice(idx + 1) };
 }
 
+interface ReplyComposerProps {
+	replyToCommentPHID: string;
+	diffPHID: string;
+	path: string;
+	line: number;
+	length: number;
+	isNewFile: boolean;
+	onClose: () => void;
+}
+
+function ReplyComposer({ replyToCommentPHID, diffPHID, path, line, length, isNewFile, onClose }: ReplyComposerProps) {
+	const [text, setText] = useState('');
+	const [busy, setBusy] = useState(false);
+	const submit = async () => {
+		if (text.trim().length === 0 || busy) return;
+		setBusy(true);
+		try {
+			const ok = await request<boolean>('submitInlineReply', {
+				replyToCommentPHID,
+				diffPHID,
+				path,
+				line,
+				length,
+				isNewFile,
+				content: text,
+			});
+			if (ok) {
+				setText('');
+				onClose();
+			}
+		} finally {
+			setBusy(false);
+		}
+	};
+	return (
+		<div className="inline-reply-composer">
+			<Suspense fallback={<div className="composer-loading">Loading editor…</div>}>
+				<RemarkupComposer onChange={setText} disabled={busy} />
+			</Suspense>
+			<div className="inline-reply-actions">
+				<button
+					type="button"
+					className="action action-secondary"
+					disabled={busy || text.trim().length === 0}
+					onClick={submit}
+				>
+					<i className="codicon codicon-comment" />
+					<span>Reply</span>
+				</button>
+				<button
+					type="button"
+					className="action action-link"
+					disabled={busy}
+					onClick={onClose}
+				>
+					<span>Cancel</span>
+				</button>
+			</div>
+		</div>
+	);
+}
+
 function isCommentLikeTx(tx: TimelineEntry): boolean {
 	if (tx.inline) return true;
 	return tx.comments && tx.comments.length > 0;
@@ -299,11 +362,12 @@ type DiffLineAnnotation = import('@pierre/diffs').DiffLineAnnotation<AnnotationM
 interface AnnotationMetadata {
 	comment: FileInlineComment;
 	txId: string | null;
+	onReply: () => void;
 	onShowInActivity: () => void;
 }
 
 function renderInlineAnnotation(annotation: DiffLineAnnotation) {
-	const { comment: c, txId, onShowInActivity } = annotation.metadata;
+	const { comment: c, txId, onReply, onShowInActivity } = annotation.metadata;
 	return (
 		<div
 			className={`pierre-annotation${c.isOutdated ? ' is-outdated' : ''}${c.isDone ? ' is-done' : ''}`}
@@ -316,14 +380,20 @@ function renderInlineAnnotation(annotation: DiffLineAnnotation) {
 				{c.isDone && <span className="badge">Done</span>}
 			</div>
 			<Remarkup html={c.contentHtml} source={c.content} />
-			{txId && (
-				<div className="pierre-annotation-actions">
+			<div className="pierre-annotation-actions">
+				{!c.isOutdated && (
+					<button type="button" className="annotation-action" onClick={onReply}>
+						<i className="codicon codicon-reply" />
+						<span>Reply</span>
+					</button>
+				)}
+				{txId && (
 					<button type="button" className="annotation-action" onClick={onShowInActivity}>
 						<i className="codicon codicon-history" />
 						<span>Show in activity</span>
 					</button>
-				</div>
-			)}
+				)}
+			</div>
 		</div>
 	);
 }
@@ -331,6 +401,7 @@ function renderInlineAnnotation(annotation: DiffLineAnnotation) {
 function buildLineAnnotations(
 	comments: FileInlineComment[],
 	commentPhidToTxId: Map<string, string>,
+	openReply: (txId: string | null) => void,
 	onShowInActivity: (txId: string) => void,
 ): DiffLineAnnotation[] {
 	return comments.map((c) => {
@@ -341,6 +412,7 @@ function buildLineAnnotations(
 			metadata: {
 				comment: c,
 				txId,
+				onReply: () => openReply(txId),
 				onShowInActivity: () => txId && onShowInActivity(txId),
 			},
 		};
@@ -350,10 +422,11 @@ function buildLineAnnotations(
 interface FileChangeProps {
 	file: FileEntry;
 	commentPhidToTxId: Map<string, string>;
+	openReply: (txId: string | null) => void;
 	onShowInActivity: (txId: string) => void;
 }
 
-function FileChange({ file, commentPhidToTxId, onShowInActivity }: FileChangeProps) {
+function FileChange({ file, commentPhidToTxId, openReply, onShowInActivity }: FileChangeProps) {
 	const [expanded, setExpanded] = useState(false);
 	const [pierre, setPierre] = useState<PierreModule | null>(null);
 	const [parsed, setParsed] = useState<ParsedFileDiff | null>(null);
@@ -391,9 +464,10 @@ function FileChange({ file, commentPhidToTxId, onShowInActivity }: FileChangePro
 		() => buildLineAnnotations(
 			file.inlineComments,
 			commentPhidToTxId,
+			openReply,
 			onShowInActivity,
 		),
-		[file.inlineComments, commentPhidToTxId, onShowInActivity],
+		[file.inlineComments, commentPhidToTxId, openReply, onShowInActivity],
 	);
 
 	const renderHeaderPrefix = useCallback(
@@ -496,6 +570,8 @@ export function App() {
 	const [comment, setComment] = useState('');
 	const [busy, setBusy] = useState(false);
 	const [commentsOnly, setCommentsOnly] = useState(true);
+	const [activeReplyTxId, setActiveReplyTxId] = useState<string | null>(null);
+
 	useEffect(() => {
 		const dispose = subscribe((message) => {
 			if (message?.res?.command === 'overview') {
@@ -521,6 +597,19 @@ export function App() {
 		return map;
 	}, [payload]);
 
+	const openReply = useCallback((txId: string | null) => {
+		if (!txId) return;
+		setActiveReplyTxId(txId);
+		requestAnimationFrame(() => {
+			const node = document.getElementById(`tx-${txId}`);
+			if (node) {
+				node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+				node.classList.add('tx-flash');
+				setTimeout(() => node.classList.remove('tx-flash'), 1200);
+			}
+		});
+	}, []);
+
 	const handleShowInActivity = useCallback((txId: string) => {
 		const node = document.getElementById(`tx-${txId}`);
 		if (node) {
@@ -529,6 +618,8 @@ export function App() {
 			setTimeout(() => node.classList.remove('tx-flash'), 1200);
 		}
 	}, []);
+
+	const closeReply = useCallback(() => setActiveReplyTxId(null), []);
 
 	if (!payload) {
 		return <div className="loading">Loading…</div>;
@@ -619,6 +710,10 @@ export function App() {
 							<ul>
 								{visibleTimeline.map((tx) => {
 									const isComment = isCommentLikeTx(tx);
+									const inline = tx.inline;
+									const headComment = tx.comments.find((c) => c.phid);
+									const canReplyHere = !!(inline && !inline.isOutdated && headComment && payload.activeDiffPHID);
+									const isReplying = activeReplyTxId === tx.id;
 									return (
 										<li
 											key={tx.id}
@@ -630,11 +725,32 @@ export function App() {
 												<strong>{tx.authorName}</strong>
 												<em>{transactionLabel(tx.type)}</em>
 												<time>{new Date(tx.dateCreated * 1000).toLocaleString()}</time>
+												{canReplyHere && !isReplying && (
+													<button
+														type="button"
+														className="tx-reply-button"
+														onClick={() => openReply(tx.id)}
+													>
+														<i className="codicon codicon-reply" />
+														<span>Reply</span>
+													</button>
+												)}
 											</header>
-											{tx.inline && <InlineSnippet inline={tx.inline} canEdit={payload.isAuthor} />}
+											{inline && <InlineSnippet inline={inline} canEdit={payload.isAuthor} />}
 											{tx.comments.map((c) => (
 												<Remarkup key={c.phid} html={c.contentHtml} source={c.content} />
 											))}
+											{canReplyHere && isReplying && headComment && inline && (
+												<ReplyComposer
+													replyToCommentPHID={headComment.phid}
+													diffPHID={payload.activeDiffPHID!}
+													path={inline.path}
+													line={inline.line}
+													length={inline.length}
+													isNewFile={inline.isNewFile}
+													onClose={closeReply}
+												/>
+											)}
 										</li>
 									);
 								})}
@@ -671,6 +787,7 @@ export function App() {
 										key={f.path}
 										file={f}
 										commentPhidToTxId={commentPhidToTxId}
+										openReply={openReply}
 										onShowInActivity={handleShowInActivity}
 									/>
 								))}

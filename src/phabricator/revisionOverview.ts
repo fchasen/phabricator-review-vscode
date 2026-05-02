@@ -20,6 +20,7 @@ interface OverviewPayload {
 	authorPHID: string;
 	authorName: string;
 	repositoryPHID: string | null;
+	activeDiffPHID: string | null;
 	bug: string | null;
 	isAuthor: boolean;
 	isReviewer: boolean;
@@ -183,6 +184,37 @@ export class RevisionOverviewPanel extends WebviewBase {
 				} catch (err) {
 					return this._throwError(message, err instanceof Error ? err.message : String(err));
 				}
+			case 'submitInlineReply': {
+				const args = message.args as {
+					replyToCommentPHID?: string;
+					diffPHID?: string;
+					path?: string;
+					line?: number;
+					length?: number;
+					isNewFile?: boolean;
+					content?: string;
+				} | undefined;
+				if (!args?.replyToCommentPHID || !args.diffPHID || !args.path || !args.content || args.line === undefined) {
+					return this._throwError(message, 'Missing reply arguments.');
+				}
+				try {
+					await this._model.postInlineComment({
+						diffPHID: args.diffPHID,
+						path: args.path,
+						line: args.line,
+						length: args.length || 0,
+						isNewFile: args.isNewFile !== false,
+						content: args.content,
+						replyToCommentPHID: args.replyToCommentPHID,
+					});
+					// Publish drafts (including the one we just created) via an empty
+					// comment transaction. Phab interprets this as "publish my drafts".
+					await this._model.comment('');
+					return this._replyMessage(message, true);
+				} catch (err) {
+					return this._throwError(message, err instanceof Error ? err.message : String(err));
+				}
+			}
 			case 'markInlineDone': {
 				const args = message.args as { commentPHID?: string; done?: boolean } | undefined;
 				if (!args?.commentPHID) {
@@ -452,6 +484,7 @@ export class RevisionOverviewPanel extends WebviewBase {
 			authorPHID: revision.fields.authorPHID,
 			authorName: resolver?.displayName(revision.fields.authorPHID) || revision.fields.authorPHID,
 			repositoryPHID: revision.fields.repositoryPHID,
+			activeDiffPHID: activeDiffPHID || null,
 			bug: revision.fields.bugzilla?.['bug-id'] || null,
 			isAuthor,
 			isReviewer,
