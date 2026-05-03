@@ -655,12 +655,16 @@ function buildInlineSnippet(
 	const spanEnd = anchor.line + Math.max(0, anchor.length);
 	for (let i = anchorIdx + 1; i < flat.length; i++) {
 		const entry = flat[i];
+		// Wrong-side entries (e.g. removal lines when commenting on the new
+		// side) shouldn't advance the trailing edge of the snippet — otherwise
+		// the row right after the commented line gets pulled in.
+		if (entry.type === skipType) continue;
 		const num = lineNumOf(entry);
 		if (num !== null && num > spanEnd) break;
 		endIdx = i;
 	}
 	const start = Math.max(0, anchorIdx - SNIPPET_CONTEXT_LINES);
-	const end = Math.min(flat.length, endIdx + SNIPPET_CONTEXT_LINES + 1);
+	const end = Math.min(flat.length, endIdx + 1);
 	return flat.slice(start, end);
 }
 
