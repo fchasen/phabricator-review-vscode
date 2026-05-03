@@ -7,9 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.2] - 2026-05-02
+
 ### Added
 - Activity-bar badge counting revisions that need your attention (your reviews requested, your revisions accepted, or your revisions needing changes).
 - Searchfox toolbar buttons in the Remarkup composer for inserting links to Mozilla Central files (path) and identifiers (symbol). Requires `searchfox-cli` on `PATH`.
+- Inline reply composer for diff comments.
+- Revision file diffs rendered with `@pierre/diffs`.
+- In-place editing for revision title and summary.
 
 ### Changed
 - Sidebar revision rows show the title as the label and the monogram (e.g. `D123456`) as the description; the status badge text was removed because the status icon already conveys it.
