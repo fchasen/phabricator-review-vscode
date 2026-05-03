@@ -554,6 +554,7 @@ function FileChange({ file, commentPhidToTxId, openReply, onShowInActivity }: Fi
 					themeType: 'system',
 					diffStyle: 'unified',
 					preferredHighlighter: 'shiki-js',
+					overflow: 'wrap',
 					collapsed: !expanded,
 				}}
 				lineAnnotations={lineAnnotations}

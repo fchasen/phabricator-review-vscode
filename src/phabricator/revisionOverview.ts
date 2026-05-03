@@ -639,33 +639,24 @@ function buildInlineSnippet(
 		flatByChangeset.set(changeset.id, flat);
 	}
 	if (flat.length === 0) return [];
-	const lineNumOf = (entry: SnippetLine) => (anchor.isNewFile ? entry.newLine : entry.oldLine);
 	const skipType = anchor.isNewFile ? 'remove' : 'add';
-	let anchorIdx = -1;
-	for (let i = 0; i < flat.length; i++) {
-		const entry = flat[i];
-		if (entry.type === skipType) continue;
-		if (lineNumOf(entry) === anchor.line) {
-			anchorIdx = i;
-			break;
-		}
-	}
+	const lineNumOf = (entry: SnippetLine) => (anchor.isNewFile ? entry.newLine : entry.oldLine);
+	// Restrict the snippet to lines on the side being commented on — including
+	// wrong-side rows in the slice was leaking an extra line into the leading
+	// window and adjacent to the commented span.
+	const sameSide = flat.filter((e) => e.type !== skipType);
+	const anchorIdx = sameSide.findIndex((e) => lineNumOf(e) === anchor.line);
 	if (anchorIdx === -1) return [];
 	let endIdx = anchorIdx;
 	const spanEnd = anchor.line + Math.max(0, anchor.length);
-	for (let i = anchorIdx + 1; i < flat.length; i++) {
-		const entry = flat[i];
-		// Wrong-side entries (e.g. removal lines when commenting on the new
-		// side) shouldn't advance the trailing edge of the snippet — otherwise
-		// the row right after the commented line gets pulled in.
-		if (entry.type === skipType) continue;
-		const num = lineNumOf(entry);
+	for (let i = anchorIdx + 1; i < sameSide.length; i++) {
+		const num = lineNumOf(sameSide[i]);
 		if (num !== null && num > spanEnd) break;
 		endIdx = i;
 	}
 	const start = Math.max(0, anchorIdx - SNIPPET_CONTEXT_LINES);
-	const end = Math.min(flat.length, endIdx + 1);
-	return flat.slice(start, end);
+	const end = Math.min(sameSide.length, endIdx + 1);
+	return sameSide.slice(start, end);
 }
 
 // Phabricator changeset types from differential.querydiffs.
