@@ -539,23 +539,25 @@ export class RevisionOverviewPanel extends WebviewBase {
 					inlineComments,
 				};
 			}),
-			timeline: transactions.map((t: Transaction) => ({
-				id: t.id,
-				type: t.type,
-				authorPHID: t.authorPHID,
-				authorName: resolver?.displayName(t.authorPHID) || t.authorPHID,
-				dateCreated: t.dateCreated,
-				fields: t.fields,
-				comments: (t.comments || [])
-					.filter((c) => !c.removed)
-					.map((c) => ({
-						phid: c.phid,
-						content: c.content.raw,
-						contentHtml: commentHtmlByPHID.get(c.phid) || '',
-						dateCreated: c.dateCreated,
-					})),
-				inline: extractInlineLink(t, statusByPath, changesetByPath, flatByChangeset, activeDiffPHID),
-			})),
+			timeline: [...transactions]
+				.sort((a, b) => a.dateCreated - b.dateCreated)
+				.map((t: Transaction) => ({
+					id: t.id,
+					type: t.type,
+					authorPHID: t.authorPHID,
+					authorName: resolver?.displayName(t.authorPHID) || t.authorPHID,
+					dateCreated: t.dateCreated,
+					fields: t.fields,
+					comments: (t.comments || [])
+						.filter((c) => !c.removed)
+						.map((c) => ({
+							phid: c.phid,
+							content: c.content.raw,
+							contentHtml: commentHtmlByPHID.get(c.phid) || '',
+							dateCreated: c.dateCreated,
+						})),
+					inline: extractInlineLink(t, statusByPath, changesetByPath, flatByChangeset, activeDiffPHID),
+				})),
 		};
 	}
 
