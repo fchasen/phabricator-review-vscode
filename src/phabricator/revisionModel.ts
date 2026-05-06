@@ -232,14 +232,12 @@ export class RevisionModel {
 
 	public async accept(message?: string): Promise<void> {
 		await this._client.accept(this._revision.phid, message);
-		this._transactions = undefined;
-		this._onDidChange.fire();
+		await this.refresh();
 	}
 
-	public async requestChanges(message: string): Promise<void> {
+	public async requestChanges(message?: string): Promise<void> {
 		await this._client.requestChanges(this._revision.phid, message);
-		this._transactions = undefined;
-		this._onDidChange.fire();
+		await this.refresh();
 	}
 
 	public async comment(message: string): Promise<void> {
