@@ -118,6 +118,12 @@ export function buildToolbarItems(): ToolbarItem[] {
 			isActive: (s) => isMarkActive(s, remarkupSchema.marks.code),
 		},
 		{
+			icon: 'strikethrough',
+			title: 'Strikethrough (⌘⇧X)',
+			command: toggleMark(remarkupSchema.marks.strike),
+			isActive: (s) => isMarkActive(s, remarkupSchema.marks.strike),
+		},
+		{
 			icon: 'text-size',
 			title: 'Heading',
 			command: toggleHeading(2),

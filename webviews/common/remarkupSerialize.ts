@@ -22,7 +22,7 @@ function emitBlock(state: State, body: string): void {
 }
 
 function escapeText(text: string): string {
-	return text.replace(/([*_`[\]\\])/g, '\\$1');
+	return text.replace(/([*_`~[\]\\])/g, '\\$1');
 }
 
 function inlineToRemarkup(node: Node): string {
@@ -52,6 +52,7 @@ function markOrder(mark: Mark): number {
 		case 'link': return 1;
 		case 'italic': return 2;
 		case 'bold': return 3;
+		case 'strike': return 4;
 		default: return 99;
 	}
 }
@@ -61,6 +62,7 @@ function wrapOneMark(text: string, mark: Mark): string {
 		case 'bold': return `**${text}**`;
 		case 'italic': return `//${text}//`;
 		case 'code': return `\`${text}\``;
+		case 'strike': return `~~${text}~~`;
 		case 'link': {
 			const href = mark.attrs.href || '';
 			return `[[ ${href} | ${text} ]]`;

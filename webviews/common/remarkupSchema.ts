@@ -98,6 +98,10 @@ const marks: { [name: string]: MarkSpec } = {
 		parseDOM: [{ tag: 'code' }],
 		toDOM: () => ['code', { spellcheck: 'false' }, 0],
 	},
+	strike: {
+		parseDOM: [{ tag: 's' }, { tag: 'del' }, { tag: 'strike' }],
+		toDOM: () => ['s', 0],
+	},
 	link: {
 		attrs: { href: { default: '' }, title: { default: null } },
 		inclusive: false,

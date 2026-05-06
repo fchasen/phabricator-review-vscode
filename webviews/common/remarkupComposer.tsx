@@ -10,6 +10,7 @@ import type { Node as PMNode } from 'prosemirror-model';
 import { remarkupSchema } from './remarkupSchema';
 import { pmDocToRemarkup } from './remarkupSerialize';
 import { applyLink, buildToolbarItems, linkToolbarItem } from './composerCommands';
+import { buildInputRulesPlugin } from './composerInputRules';
 import { request } from './message';
 
 interface Props {
@@ -112,6 +113,7 @@ function buildKeymap() {
 		'Mod-b': toggleMark(remarkupSchema.marks.bold),
 		'Mod-i': toggleMark(remarkupSchema.marks.italic),
 		'Mod-`': toggleMark(remarkupSchema.marks.code),
+		'Mod-Shift-x': toggleMark(remarkupSchema.marks.strike),
 		'Mod-Shift-c': wrapIn(remarkupSchema.nodes.blockquote),
 		'Tab': sinkListItem(remarkupSchema.nodes.list_item),
 		'Shift-Tab': liftListItem(remarkupSchema.nodes.list_item),
@@ -160,7 +162,7 @@ export function RemarkupComposer({ onChange, disabled, placeholder, initialValue
 		const state = EditorState.create({
 			schema: remarkupSchema,
 			doc: seed ? buildInitialDoc(seed) : undefined,
-			plugins: [history(), keymap(buildKeymap()), keymap(baseKeymap)],
+			plugins: [history(), buildInputRulesPlugin(remarkupSchema), keymap(buildKeymap()), keymap(baseKeymap)],
 		});
 		const view = new EditorView(editorRef.current, {
 			state,
