@@ -163,7 +163,7 @@ export class RevisionOverviewPanel extends WebviewBase {
 			case 'openLando': {
 				const base = vscode.workspace.getConfiguration('phabricator').get<string>('landoBaseUrl', 'https://lando.moz.tools/');
 				const trimmed = base.endsWith('/') ? base : `${base}/`;
-				vscode.env.openExternal(vscode.Uri.parse(`${trimmed}${this._model.id}/`));
+				vscode.env.openExternal(vscode.Uri.parse(`${trimmed}${this._model.monogram}/`));
 				return this._replyMessage(message, true);
 			}
 			case 'comment':
