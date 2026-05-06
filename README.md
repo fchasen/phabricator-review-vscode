@@ -2,8 +2,6 @@
 
 Review and create revisions on Mozilla's [Phabricator](https://phabricator.services.mozilla.com/) instance.
 
-![Phabricator Review for VS Code](resources/screenshot.png)
-
 ## Getting started
 
 1. Open the Phabricator activity-bar view in the sidebar.

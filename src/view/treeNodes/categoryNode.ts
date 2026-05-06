@@ -22,6 +22,6 @@ export class CategoryNode extends vscode.TreeItem {
 			empty.collapsibleState = vscode.TreeItemCollapsibleState.None;
 			return [empty];
 		}
-		return revisions.map((r) => new RevisionNode(r));
+		return revisions.map((r) => new RevisionNode(r, this.definition.key));
 	}
 }

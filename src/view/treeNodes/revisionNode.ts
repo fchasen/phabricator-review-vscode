@@ -28,9 +28,9 @@ export class RevisionNode extends vscode.TreeItem {
 	contextValue = 'revision';
 	public readonly browserUri: string;
 
-	constructor(public readonly model: RevisionModel) {
+	constructor(public readonly model: RevisionModel, scope?: string) {
 		super(model.title, vscode.TreeItemCollapsibleState.Collapsed);
-		this.id = `revision:${model.phid}`;
+		this.id = scope ? `revision:${scope}:${model.phid}` : `revision:${model.phid}`;
 		this.description = model.monogram;
 		this.tooltip = `${model.monogram} — ${model.title}\n${model.statusName}`;
 		this.iconPath = iconForStatus(model.statusValue);

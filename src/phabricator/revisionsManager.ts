@@ -120,7 +120,10 @@ export class RevisionsManager extends Disposable {
 				break;
 			}
 		}
-		const models = revisions.map((r) => this._adopt(r));
+		let models = revisions.map((r) => this._adopt(r));
+		if (category === 'reviewer') {
+			models = models.filter((m) => m.authorPHID !== session.userPHID);
+		}
 		this._categoryCache.set(category, models);
 		return models;
 	}

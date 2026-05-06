@@ -2,7 +2,7 @@
 	"name": "phabricator-review-vscode",
 	"displayName": "Phabricator Review",
 	"description": "Review and create revisions on Mozilla's Phabricator instance.",
-	"version": "0.0.2",
+	"version": "0.0.3",
 	"publisher": "fchasen",
 	"license": "MPL-2.0",
 	"repository": {
@@ -34,7 +34,7 @@
 			"activitybar": [
 				{
 					"id": "phabricator",
-					"title": "Mozilla Phabricator",
+					"title": "Phabricator",
 					"icon": "resources/icons/phabricator.svg"
 				}
 			]
