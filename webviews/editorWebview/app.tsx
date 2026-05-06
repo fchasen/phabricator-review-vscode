@@ -566,6 +566,20 @@ function FileChange({ file, commentPhidToTxId, openReply, onShowInActivity }: Fi
 	);
 }
 
+function renderTitleWithBugLink(title: string) {
+	const match = /^(Bug\s+(\d+))(\b.*)$/i.exec(title);
+	if (!match) return title;
+	const [, label, id, rest] = match;
+	return (
+		<>
+			<a href={`https://bugzilla.mozilla.org/show_bug.cgi?id=${id}`} target="_blank" rel="noreferrer">
+				{label}
+			</a>
+			{rest}
+		</>
+	);
+}
+
 function EditableTitle({ title, canEdit }: { title: string; canEdit: boolean }) {
 	const [editing, setEditing] = useState(false);
 	const [value, setValue] = useState(title);
@@ -614,7 +628,7 @@ function EditableTitle({ title, canEdit }: { title: string; canEdit: boolean }) 
 	if (!editing) {
 		return (
 			<div className="title-row">
-				<h1>{title}</h1>
+				<h1>{renderTitleWithBugLink(title)}</h1>
 				{canEdit && (
 					<button
 						type="button"
