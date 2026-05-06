@@ -1096,7 +1096,7 @@ export function App() {
 						) : (
 							<ul className="tags">
 								{payload.projects.map((p) => (
-									<li key={p.phid} className="tag">#{p.displayName}</li>
+									<li key={p.phid} className="tag" title={p.displayName}>#{p.displayName}</li>
 								))}
 							</ul>
 						)}

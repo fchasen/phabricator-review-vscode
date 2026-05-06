@@ -619,6 +619,10 @@ body {
 	border: 1px solid var(--vscode-input-border, transparent);
 	border-radius: 999px;
 	color: var(--vscode-textLink-foreground);
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 /* Markdown body */
