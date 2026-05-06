@@ -663,7 +663,7 @@ class PhabricatorClient {
 		const limit = Math.min(Math.max(1, args.limit ?? 8), 50);
 		/** @type {{ data: Project[], cursor: ConduitCursor }} */
 		const result = await this.call('project.search', {
-			constraints: { query, statuses: ['active'] },
+			constraints: { name: query },
 			limit,
 		});
 		return result.data || [];

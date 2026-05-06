@@ -55,7 +55,7 @@ test('searchUsers clamps the limit', async () => {
 	assert.equal(decodeBody(calls[1].body).params.limit, 1);
 });
 
-test('searchProjects posts project.search with query + active statuses', async () => {
+test('searchProjects posts project.search with name constraint', async () => {
 	const { fetchImpl, calls } = mockFetch([
 		{
 			body: {
@@ -78,8 +78,8 @@ test('searchProjects posts project.search with query + active statuses', async (
 
 	const decoded = decodeBody(calls[0].body);
 	assert.equal(calls[0].url.endsWith('project.search'), true);
-	assert.equal(decoded.params.constraints.query, 'sec');
-	assert.deepEqual(decoded.params.constraints.statuses, ['active']);
+	assert.equal(decoded.params.constraints.name, 'sec');
+	assert.equal(decoded.params.constraints.statuses, undefined);
 	assert.equal(decoded.params.limit, 8);
 });
 

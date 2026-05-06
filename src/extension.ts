@@ -9,6 +9,7 @@ import { PHAB_SCHEME, toPhabUri } from './common/uri';
 import { RevisionOverviewPanel } from './phabricator/revisionOverview';
 import { RevisionCommentController } from './view/revisionCommentController';
 import { runSubmitCommitFlow } from './view/createRevisionFlow';
+import type { Project } from './client';
 
 const SESSION_CONTEXT_KEY = 'phabricator.session';
 
@@ -109,6 +110,83 @@ interface RevealInlineArgs {
 	status?: 'added' | 'removed' | 'modified' | 'renamed' | 'copied';
 }
 
+interface ProjectPickItem extends vscode.QuickPickItem {
+	phid: string;
+}
+
+const PROJECT_PICK_DEBOUNCE_MS = 200;
+const PROJECT_PICK_LIMIT = 20;
+
+function pickProject(
+	session: import('./auth/credentialStore').PhabSession,
+	existingPHIDs: Set<string>,
+): Promise<ProjectPickItem | null> {
+	return new Promise((resolve) => {
+		const qp = vscode.window.createQuickPick<ProjectPickItem>();
+		qp.placeholder = 'Search project tags by name';
+		qp.matchOnDescription = true;
+
+		let token = 0;
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		let settled = false;
+		const settle = (value: ProjectPickItem | null) => {
+			if (settled) return;
+			settled = true;
+			resolve(value);
+		};
+
+		const search = (value: string) => {
+			const cur = ++token;
+			const term = value.trim();
+			if (!term) {
+				qp.items = [];
+				qp.busy = false;
+				return;
+			}
+			qp.busy = true;
+			void session.client.searchProjects({ query: term, limit: PROJECT_PICK_LIMIT }).then(
+				(projects: Project[]) => {
+					if (cur !== token) return;
+					qp.busy = false;
+					qp.items = projects
+						.filter((p) => !existingPHIDs.has(p.phid))
+						.map((p) => {
+							const name = p.fields?.name || p.phid;
+							const slug = p.fields?.slug;
+							return {
+								label: name,
+								description: slug ? `#${slug}` : undefined,
+								phid: p.phid,
+								alwaysShow: true,
+							};
+						});
+				},
+				(err: unknown) => {
+					if (cur !== token) return;
+					qp.busy = false;
+					qp.items = [];
+					Logger.warn(`project.search failed: ${err instanceof Error ? err.message : err}`, 'Projects');
+				},
+			);
+		};
+
+		qp.onDidChangeValue((v) => {
+			if (timer) clearTimeout(timer);
+			timer = setTimeout(() => search(v), PROJECT_PICK_DEBOUNCE_MS);
+		});
+		qp.onDidAccept(() => {
+			settle(qp.selectedItems[0] || null);
+			qp.hide();
+		});
+		qp.onDidHide(() => {
+			if (timer) clearTimeout(timer);
+			settle(null);
+			qp.dispose();
+		});
+		qp.show();
+	});
+}
+
 async function editProjectsFlow(manager: import('./phabricator/revisionsManager').RevisionsManager, revisionPHID: string): Promise<void> {
 	const session = manager.session;
 	if (!session) {
@@ -121,60 +199,15 @@ async function editProjectsFlow(manager: import('./phabricator/revisionsManager'
 		return;
 	}
 	const current = model.revision.attachments.projects?.projectPHIDs || [];
-	const resolver = manager.userResolver;
-	if (resolver && current.length > 0) {
-		await resolver.resolveMany(current);
-	}
-	const currentSlugs = current.map((p) => resolver?.displayName(p) || p);
-	const input = await vscode.window.showInputBox({
-		prompt: 'Project tags (comma-separated slugs, with or without #)',
-		placeHolder: 'firefox-build-system, backup-reviewers-rotation',
-		value: currentSlugs.join(', '),
-		ignoreFocusOut: true,
-	});
-	if (input === undefined) {
+	const picked = await pickProject(session, new Set(current));
+	if (!picked) {
 		return;
 	}
-	const tokens = input
-		.split(',')
-		.map((t) => t.trim().replace(/^#/, ''))
-		.filter((t) => t.length > 0);
-
-	const resolvedPHIDs: string[] = [];
-	if (tokens.length > 0) {
-		try {
-			const found = await session.client.resolveProjectsBySlug(tokens);
-			const unknown: string[] = [];
-			for (const slug of tokens) {
-				const project = found.get(slug);
-				if (project) {
-					resolvedPHIDs.push(project.phid);
-				} else {
-					unknown.push(slug);
-				}
-			}
-			if (unknown.length > 0) {
-				const proceed = await vscode.window.showWarningMessage(
-					`Unknown project slug(s): ${unknown.join(', ')}. Continue and ignore them?`,
-					{ modal: true },
-					'Continue',
-					'Cancel',
-				);
-				if (proceed !== 'Continue') {
-					return;
-				}
-			}
-		} catch (err) {
-			vscode.window.showErrorMessage(`project.search failed: ${err instanceof Error ? err.message : err}`);
-			return;
-		}
-	}
-
 	try {
-		await model.setProjects(resolvedPHIDs);
-		vscode.window.showInformationMessage(`Updated project tags on ${model.monogram}.`);
+		await model.setProjects([...current, picked.phid]);
+		vscode.window.showInformationMessage(`Tagged ${model.monogram} with ${picked.label}.`);
 	} catch (err) {
-		vscode.window.showErrorMessage(`Failed to update projects: ${err instanceof Error ? err.message : err}`);
+		vscode.window.showErrorMessage(`Failed to add project tag: ${err instanceof Error ? err.message : err}`);
 	}
 }
 

@@ -1087,8 +1087,8 @@ export function App() {
 					<section className="projects">
 						<div className="section-head">
 							<h3>Projects ({payload.projects.length})</h3>
-							<button className="link-button" onClick={editProjects} title="Add or remove project tags">
-								Edit
+							<button className="link-button" onClick={editProjects} title="Add a project tag">
+								Add
 							</button>
 						</div>
 						{payload.projects.length === 0 ? (
