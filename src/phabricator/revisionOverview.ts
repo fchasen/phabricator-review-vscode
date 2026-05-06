@@ -182,7 +182,7 @@ export class RevisionOverviewPanel extends WebviewBase {
 				}
 			case 'requestChanges':
 				try {
-					await this._model.requestChanges(String(message.args));
+					await this._model.requestChanges(message.args ? String(message.args) : undefined);
 					return this._replyMessage(message, true);
 				} catch (err) {
 					return this._throwError(message, err instanceof Error ? err.message : String(err));

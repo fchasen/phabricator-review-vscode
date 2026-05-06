@@ -326,17 +326,15 @@ class PhabricatorClient {
 
 	/**
 	 * @param {string|number} revIdOrPHID
-	 * @param {string} body
+	 * @param {string} [body]
 	 * @returns {Promise<EditResult>}
 	 */
 	requestChanges(revIdOrPHID, body) {
-		return this.editRevision({
-			objectIdentifier: revIdOrPHID,
-			transactions: [
-				{ type: 'reject', value: true },
-				{ type: 'comment', value: body },
-			],
-		});
+		const transactions = /** @type {EditTransaction[]} */ ([{ type: 'reject', value: true }]);
+		if (body) {
+			transactions.push({ type: 'comment', value: body });
+		}
+		return this.editRevision({ objectIdentifier: revIdOrPHID, transactions });
 	}
 
 	/**

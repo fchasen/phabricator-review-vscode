@@ -757,6 +757,7 @@ function EditableSummary({
 export function App() {
 	const [payload, setPayload] = useState<OverviewPayload | undefined>();
 	const [comment, setComment] = useState('');
+	const [composerKey, setComposerKey] = useState(0);
 	const [busy, setBusy] = useState(false);
 	const [commentsOnly, setCommentsOnly] = useState(true);
 	const [activeReplyTxId, setActiveReplyTxId] = useState<string | null>(null);
@@ -819,6 +820,7 @@ export function App() {
 		try {
 			await request(verb, comment);
 			setComment('');
+			setComposerKey((k) => k + 1);
 		} finally {
 			setBusy(false);
 		}
@@ -949,7 +951,7 @@ export function App() {
 					<section className="composer">
 						<h2>Comment</h2>
 						<Suspense fallback={<div className="composer-loading">Loading editor…</div>}>
-							<RemarkupComposer onChange={setComment} disabled={busy} />
+							<RemarkupComposer key={composerKey} onChange={setComment} disabled={busy} />
 						</Suspense>
 						<div className="composer-actions">
 							<button
@@ -1017,9 +1019,9 @@ export function App() {
 						</button>
 						<button
 							className="action action-warn"
-							disabled={busy || comment.trim().length === 0}
+							disabled={busy}
 							onClick={() => submit('requestChanges')}
-							title="Block on changes (requires a comment)"
+							title="Block on changes"
 						>
 							<span className="action-icon"><i className="codicon codicon-warning" /></span>
 							<span>Request changes</span>
