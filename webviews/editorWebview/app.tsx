@@ -99,6 +99,21 @@ interface TimelineEntry {
 	inline?: InlineAnchor;
 }
 
+interface StackEntry {
+	id: number;
+	phid: string;
+	monogram: string;
+	title: string;
+	statusValue: string;
+	statusName: string;
+	uri: string;
+}
+
+interface StackInfo {
+	parents: StackEntry[];
+	children: StackEntry[];
+}
+
 interface OverviewPayload {
 	id: number;
 	monogram: string;
@@ -111,6 +126,7 @@ interface OverviewPayload {
 	bug: string | null;
 	isAuthor: boolean;
 	isReviewer: boolean;
+	stack: StackInfo | null;
 	summary: string;
 	summaryHtml: string;
 	testPlan: string;
@@ -139,6 +155,93 @@ const FILE_STATUS_ICON: Record<string, string> = {
 	'renamed': 'diff-renamed',
 	'copied': 'copy',
 };
+
+const REVISION_STATUS_ICON: Record<string, { codicon: string; chartColor?: string }> = {
+	'needs-review': { codicon: 'git-pull-request', chartColor: 'blue' },
+	'needs-revision': { codicon: 'git-pull-request', chartColor: 'red' },
+	'changes-planned': { codicon: 'edit', chartColor: 'yellow' },
+	'accepted': { codicon: 'pass-filled', chartColor: 'green' },
+	'published': { codicon: 'git-merge', chartColor: 'purple' },
+	'abandoned': { codicon: 'circle-slash' },
+	'draft': { codicon: 'git-pull-request-draft' },
+};
+
+interface StackCurrent {
+	monogram: string;
+	statusValue: string;
+	statusName: string;
+	title: string;
+}
+
+function StackRow({
+	entry,
+	dir,
+	current,
+	onOpen,
+}: {
+	entry: { monogram: string; title: string; statusValue: string; statusName: string };
+	dir: 'up' | 'down' | 'self';
+	current: boolean;
+	onOpen?: () => void;
+}) {
+	const spec = REVISION_STATUS_ICON[entry.statusValue] || { codicon: 'git-pull-request' };
+	const isClosed = entry.statusValue === 'abandoned' || entry.statusValue === 'published';
+	const iconStyle = spec.chartColor
+		? { color: `var(--vscode-charts-${spec.chartColor})` }
+		: undefined;
+	const className = `stack-row${current ? ' stack-row-current' : ''}${isClosed ? ' is-closed' : ''}`;
+	const arrowGlyph = dir === 'self' ? '│' : null;
+	const arrowIcon = dir !== 'self'
+		? <i className={`codicon codicon-arrow-${dir}`} />
+		: null;
+	const inner = (
+		<>
+			<span className="stack-arrow" aria-hidden="true">
+				{arrowGlyph || arrowIcon}
+			</span>
+			<span className="stack-status" aria-label={entry.statusName} style={iconStyle}>
+				<i className={`codicon codicon-${spec.codicon}`} />
+			</span>
+			<span className="stack-monogram">{entry.monogram}</span>
+			<span className="stack-title">{entry.title}</span>
+		</>
+	);
+	if (current) {
+		return <div className={className} title={`${entry.monogram}: ${entry.title}`}>{inner}</div>;
+	}
+	return (
+		<button
+			type="button"
+			className={className}
+			onClick={onOpen}
+			title={`${entry.monogram}: ${entry.title} (${entry.statusName})`}
+		>
+			{inner}
+		</button>
+	);
+}
+
+function StackPanel({ stack, current }: { stack: StackInfo; current: StackCurrent }) {
+	const open = (id: number) => request('openStackRevision', { id });
+	return (
+		<section className="stack">
+			<h3>Stack</h3>
+			<div className="stack-list">
+				{stack.parents.map((p) => (
+					<StackRow key={p.phid} entry={p} dir="up" current={false} onOpen={() => open(p.id)} />
+				))}
+				<StackRow
+					entry={{ ...current, title: 'this revision' }}
+					dir="self"
+					current
+				/>
+				{stack.children.map((c) => (
+					<StackRow key={c.phid} entry={c} dir="down" current={false} onOpen={() => open(c.id)} />
+				))}
+			</div>
+		</section>
+	);
+}
 
 const AVATAR_PALETTE = [
 	'#3b82f6', '#8b5cf6', '#ec4899', '#f97316',
@@ -916,14 +1019,14 @@ export function App() {
 										<li
 											key={tx.id}
 											id={`tx-${tx.id}`}
-											className={`tx tx-${String(tx.type || 'unknown').replace(/[.:]/g, '-')}`}
+											className={`tx tx-${String(tx.type || 'unknown').replace(/[.:]/g, '-')} ${isComment ? 'tx-card' : 'tx-event'}`}
 										>
 											<header>
 												{isComment ? (
 													<Avatar phid={tx.authorPHID} name={tx.authorName} size={28} />
 												) : (
 													<span className="tx-icon" aria-hidden="true">
-														<TxIcon type={tx.type} />
+														<TxIcon type={tx.type} fields={tx.fields} />
 													</span>
 												)}
 												<strong>{tx.authorName}</strong>
@@ -1120,6 +1223,18 @@ export function App() {
 							</ul>
 						)}
 					</section>
+
+					{payload.stack && (payload.stack.parents.length > 0 || payload.stack.children.length > 0) && (
+						<StackPanel
+							stack={payload.stack}
+							current={{
+								monogram: payload.monogram,
+								statusValue: payload.statusValue,
+								statusName: payload.statusName,
+								title: payload.title,
+							}}
+						/>
+					)}
 
 				</aside>
 			</div>

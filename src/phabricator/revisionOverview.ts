@@ -8,6 +8,22 @@ import { RevisionModel } from './revisionModel';
 import { changesetStatus } from '../view/treeNodes/fileChangeNode';
 import { flexibleBool } from '../common/flexibleBool';
 import Logger from '../common/logger';
+import { UserResolver } from './userResolver';
+
+interface StackEntry {
+	id: number;
+	phid: string;
+	monogram: string;
+	title: string;
+	statusValue: string;
+	statusName: string;
+	uri: string;
+}
+
+interface StackInfo {
+	parents: StackEntry[];
+	children: StackEntry[];
+}
 
 interface OverviewPayload {
 	id: number;
@@ -24,6 +40,7 @@ interface OverviewPayload {
 	bug: string | null;
 	isAuthor: boolean;
 	isReviewer: boolean;
+	stack: StackInfo | null;
 	summary: string;
 	summaryHtml: string;
 	testPlan: string;
@@ -260,6 +277,18 @@ export class RevisionOverviewPanel extends WebviewBase {
 				});
 				return this._replyMessage(message, true);
 			}
+			case 'openStackRevision': {
+				const args = message.args as { id?: number } | undefined;
+				if (!args?.id) {
+					return this._replyMessage(message, false);
+				}
+				try {
+					await vscode.commands.executeCommand('phabricator.openRevision', args.id);
+					return this._replyMessage(message, true);
+				} catch (err) {
+					return this._throwError(message, err instanceof Error ? err.message : String(err));
+				}
+			}
 			case 'editProjects': {
 				try {
 					await vscode.commands.executeCommand('phabricator.editProjects', this._model.phid);
@@ -379,6 +408,7 @@ export class RevisionOverviewPanel extends WebviewBase {
 		const revision = this._model.revision;
 		const transactions = await this._model.getTransactions();
 		const changesets = await this._model.getChangesets().catch(() => []);
+		const stack = await this._fetchStack();
 		const statusByPath = new Map<string, ReturnType<typeof changesetStatus>>();
 		const changesetByPath = new Map<string, Changeset>();
 		for (const cs of changesets) {
@@ -415,7 +445,7 @@ export class RevisionOverviewPanel extends WebviewBase {
 		}
 		const phidNames: Record<string, string> = {};
 		for (const phid of phidsToResolve) {
-			if (resolver) phidNames[phid] = resolver.displayName(phid);
+			phidNames[phid] = resolveDisplayName(phid, resolver);
 		}
 
 		const summary = revision.fields.summary || '';
@@ -483,7 +513,7 @@ export class RevisionOverviewPanel extends WebviewBase {
 					isNewFile,
 					isOutdated,
 					isDone,
-					authorName: resolver?.displayName(t.authorPHID) || t.authorPHID,
+					authorName: resolveDisplayName(t.authorPHID, resolver),
 					authorPHID: t.authorPHID,
 					dateCreated: c.dateCreated,
 					content: c.content.raw,
@@ -502,19 +532,20 @@ export class RevisionOverviewPanel extends WebviewBase {
 			statusName: revision.fields.status.name,
 			statusValue: revision.fields.status.value,
 			authorPHID: revision.fields.authorPHID,
-			authorName: resolver?.displayName(revision.fields.authorPHID) || revision.fields.authorPHID,
+			authorName: resolveDisplayName(revision.fields.authorPHID, resolver),
 			repositoryPHID: revision.fields.repositoryPHID,
 			activeDiffPHID: activeDiffPHID || null,
 			bug: revision.fields.bugzilla?.['bug-id'] || null,
 			isAuthor,
 			isReviewer,
+			stack,
 			summary,
 			summaryHtml,
 			testPlan,
 			testPlanHtml,
 			reviewers: reviewerEntries.map((r) => ({
 				phid: r.reviewerPHID,
-				displayName: resolver?.displayName(r.reviewerPHID) || r.reviewerPHID,
+				displayName: resolveDisplayName(r.reviewerPHID, resolver),
 				isProject: resolver?.isProject(r.reviewerPHID) || false,
 				status: r.status,
 				isBlocking: r.isBlocking,
@@ -522,7 +553,7 @@ export class RevisionOverviewPanel extends WebviewBase {
 			subscribers: revision.attachments.subscribers?.subscriberPHIDs || [],
 			projects: projectPHIDs.map((phid) => ({
 				phid,
-				displayName: resolver?.displayName(phid) || phid,
+				displayName: resolveDisplayName(phid, resolver),
 			})),
 			files: changesets.map((cs) => {
 				const newPath = cs.currentPath || cs.oldPath || '';
@@ -553,7 +584,7 @@ export class RevisionOverviewPanel extends WebviewBase {
 					id: t.id,
 					type: t.type,
 					authorPHID: t.authorPHID,
-					authorName: resolver?.displayName(t.authorPHID) || t.authorPHID,
+					authorName: resolveDisplayName(t.authorPHID, resolver),
 					dateCreated: t.dateCreated,
 					fields: t.fields,
 					comments: (t.comments || [])
@@ -568,6 +599,72 @@ export class RevisionOverviewPanel extends WebviewBase {
 				})),
 			phidNames,
 		};
+	}
+
+	// v1: direct neighbors only — no recursive walk up/down the chain.
+	private async _fetchStack(): Promise<StackInfo | null> {
+		const session = this._manager.session;
+		if (!session) return null;
+		const sourcePHID = this._model.phid;
+		let edges: { source: string; target: string; type: string }[];
+		try {
+			edges = await session.client.searchEdges({
+				sourcePHIDs: [sourcePHID],
+				types: ['revision.parent', 'revision.child'],
+			});
+		} catch (err) {
+			Logger.warn(
+				`edge.search failed for ${this._model.monogram}: ${err instanceof Error ? err.message : err}`,
+				'Overview',
+			);
+			return null;
+		}
+		const parentPHIDs = new Set<string>();
+		const childPHIDs = new Set<string>();
+		for (const edge of edges) {
+			if (edge.target === sourcePHID) continue;
+			if (edge.type === 'revision.parent') {
+				parentPHIDs.add(edge.target);
+			} else if (edge.type === 'revision.child') {
+				childPHIDs.add(edge.target);
+			}
+		}
+		if (parentPHIDs.size === 0 && childPHIDs.size === 0) {
+			return null;
+		}
+		const allPHIDs = Array.from(new Set([...parentPHIDs, ...childPHIDs]));
+		const resolved = await Promise.all(
+			allPHIDs.map((phid) => this._manager.getOrFetchRevision(phid).catch(() => undefined)),
+		);
+		const byPHID = new Map<string, RevisionModel>();
+		for (let i = 0; i < allPHIDs.length; i++) {
+			const model = resolved[i];
+			if (model) byPHID.set(allPHIDs[i], model);
+		}
+		const toEntry = (m: RevisionModel): StackEntry => ({
+			id: m.id,
+			phid: m.phid,
+			monogram: m.monogram,
+			title: m.title,
+			statusValue: m.statusValue,
+			statusName: m.statusName,
+			uri: m.uri,
+		});
+		const sortById = (a: StackEntry, b: StackEntry) => a.id - b.id;
+		const parents = Array.from(parentPHIDs)
+			.map((p) => byPHID.get(p))
+			.filter((m): m is RevisionModel => !!m)
+			.map(toEntry)
+			.sort(sortById);
+		const children = Array.from(childPHIDs)
+			.map((p) => byPHID.get(p))
+			.filter((m): m is RevisionModel => !!m)
+			.map(toEntry)
+			.sort(sortById);
+		if (parents.length === 0 && children.length === 0) {
+			return null;
+		}
+		return { parents, children };
 	}
 
 	private _html(): string {
@@ -892,6 +989,17 @@ function runSearchfoxLivePicker(mode: Mode): Promise<{ url: string; text: string
 
 function runSearchfoxPathPicker(): Promise<{ url: string; text: string } | null> {
 	return runSearchfoxLivePicker('path');
+}
+
+function applicationDisplayName(phid: string): string | null {
+	const m = /^PHID-APPS-(?:Phabricator)?(.+?)(?:Application)?$/.exec(phid);
+	return m ? m[1] : null;
+}
+
+function resolveDisplayName(phid: string, resolver: UserResolver | undefined): string {
+	const resolved = resolver?.displayName(phid);
+	if (resolved && resolved !== phid) return resolved;
+	return applicationDisplayName(phid) || phid;
 }
 
 function collectPhids(value: unknown, out: Set<string>): void {
