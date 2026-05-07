@@ -135,6 +135,22 @@ test('isMarkActive reflects whether the selection has a mark', () => {
 	assert.equal(isMarkActive(inside, remarkupSchema.marks.bold), true);
 });
 
+test('pmDocToRemarkup can preserve literal special characters', () => {
+	const doc = docOf([paragraph('Use foo_bar **as typed** [ok] \\ done')]);
+
+	assert.equal(
+		pmDocToRemarkup(doc, { escapePlainText: false }),
+		'Use foo_bar **as typed** [ok] \\ done',
+	);
+});
+
+test('pmDocToRemarkup preserves inline code markers when editing existing fields', () => {
+	const text = 'This pref is also set from the `bandwidthMax`\u00a0nimbus variable.';
+	const doc = docOf([paragraph(text)]);
+
+	assert.equal(pmDocToRemarkup(doc, { escapePlainText: false }), text);
+});
+
 // ---------------------------------------------------------------- heading
 
 test('toggleHeading promotes a paragraph to a heading at the requested level', () => {
@@ -237,13 +253,14 @@ test('applyLink with empty selection and no display returns false (nothing to ma
 
 // ---------------------------------------------------------------- toolbar shape
 
-test('buildToolbarItems exposes the expected eight buttons', () => {
+test('buildToolbarItems exposes the expected buttons', () => {
 	const items = buildToolbarItems();
 	const icons = items.map((i) => i.icon);
 	assert.deepEqual(icons, [
 		'bold',
 		'italic',
 		'code',
+		'strikethrough',
 		'text-size',
 		'quote',
 		'list-unordered',

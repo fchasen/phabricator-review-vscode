@@ -53,6 +53,7 @@ const ICONS: Record<string, string> = {
 
 	'title': 'edit',
 	'summary': 'book',
+	'testPlan': 'beaker',
 	'test-plan': 'beaker',
 	'update': 'git-commit',
 

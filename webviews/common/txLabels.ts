@@ -54,6 +54,7 @@ const LABELS: Record<string, string> = {
 
 	'title': 'changed the title',
 	'summary': 'changed the summary',
+	'testPlan': 'changed the test plan',
 	'test-plan': 'changed the test plan',
 	'update': 'updated the diff',
 

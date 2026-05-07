@@ -522,6 +522,7 @@ body {
 .timeline > ul > li.tx-projects-remove,
 .timeline > ul > li.tx-title,
 .timeline > ul > li.tx-summary,
+.timeline > ul > li.tx-testPlan,
 .timeline > ul > li.tx-test-plan,
 .timeline > ul > li.tx-update,
 .timeline > ul > li.tx-bugzilla-bug-id,

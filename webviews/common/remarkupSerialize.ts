@@ -4,6 +4,11 @@ interface State {
 	out: string;
 	prefix: string;
 	listStack: Array<{ kind: 'bullet' | 'ordered'; index: number }>;
+	escapePlainText: boolean;
+}
+
+interface SerializeOptions {
+	escapePlainText?: boolean;
 }
 
 function withPrefix(state: State, prefix: string, fn: () => void): void {
@@ -25,10 +30,10 @@ function escapeText(text: string): string {
 	return text.replace(/([*_`~[\]\\])/g, '\\$1');
 }
 
-function inlineToRemarkup(node: Node): string {
+function inlineToRemarkup(state: State, node: Node): string {
 	if (node.isText) {
 		const raw = node.text || '';
-		const escaped = escapeText(raw);
+		const escaped = state.escapePlainText ? escapeText(raw) : raw;
 		return wrapWithMarks(escaped, node.marks);
 	}
 	if (node.type.name === 'hard_break') {
@@ -71,10 +76,10 @@ function wrapOneMark(text: string, mark: Mark): string {
 	}
 }
 
-function inlineChildren(node: Node): string {
+function inlineChildren(state: State, node: Node): string {
 	let out = '';
 	node.forEach((child) => {
-		out += inlineToRemarkup(child);
+		out += inlineToRemarkup(state, child);
 	});
 	return out;
 }
@@ -84,12 +89,12 @@ function blockToRemarkup(state: State, node: Node, isFirstSibling: boolean): voi
 
 	switch (node.type.name) {
 		case 'paragraph': {
-			emitBlock(state, inlineChildren(node));
+			emitBlock(state, inlineChildren(state, node));
 			break;
 		}
 		case 'heading': {
 			const level = Math.max(1, Math.min(6, node.attrs.level || 1));
-			emitBlock(state, '#'.repeat(level) + ' ' + inlineChildren(node));
+			emitBlock(state, '#'.repeat(level) + ' ' + inlineChildren(state, node));
 			break;
 		}
 		case 'blockquote': {
@@ -134,7 +139,12 @@ function blockToRemarkup(state: State, node: Node, isFirstSibling: boolean): voi
 			if (top?.kind === 'ordered') top.index++;
 			const indent = ' '.repeat(marker.length);
 			let first = true;
-			const wrap: State = { out: '', prefix: '', listStack: state.listStack };
+			const wrap: State = {
+				out: '',
+				prefix: '',
+				listStack: state.listStack,
+				escapePlainText: state.escapePlainText,
+			};
 			node.forEach((child) => {
 				blockToRemarkup(wrap, child, first);
 				first = false;
@@ -156,7 +166,7 @@ function blockToRemarkup(state: State, node: Node, isFirstSibling: boolean): voi
 			break;
 		}
 		default: {
-			emitBlock(state, inlineChildren(node));
+			emitBlock(state, inlineChildren(state, node));
 			break;
 		}
 	}
@@ -170,8 +180,13 @@ function blockToRemarkup(state: State, node: Node, isFirstSibling: boolean): voi
  * blockquotes, fenced code, and HRs (Phabricator's renderer accepts those
  * forms identically).
  */
-export function pmDocToRemarkup(doc: Node): string {
-	const state: State = { out: '', prefix: '', listStack: [] };
+export function pmDocToRemarkup(doc: Node, options: SerializeOptions = {}): string {
+	const state: State = {
+		out: '',
+		prefix: '',
+		listStack: [],
+		escapePlainText: options.escapePlainText !== false,
+	};
 	let first = true;
 	doc.forEach((child) => {
 		blockToRemarkup(state, child, first);

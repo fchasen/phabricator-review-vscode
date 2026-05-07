@@ -18,6 +18,7 @@ interface Props {
 	disabled?: boolean;
 	placeholder?: string;
 	initialValue?: string;
+	escapePlainText?: boolean;
 }
 
 function buildInitialDoc(text: string): PMNode {
@@ -129,7 +130,7 @@ function buildKeymap() {
 	return km;
 }
 
-export function RemarkupComposer({ onChange, disabled, placeholder, initialValue }: Props) {
+export function RemarkupComposer({ onChange, disabled, placeholder, initialValue, escapePlainText }: Props) {
 	const editorRef = useRef<HTMLDivElement>(null);
 	const viewRef = useRef<EditorView | null>(null);
 	const initialValueRef = useRef(initialValue);
@@ -170,7 +171,7 @@ export function RemarkupComposer({ onChange, disabled, placeholder, initialValue
 				const next = view.state.apply(tr);
 				view.updateState(next);
 				if (tr.docChanged && onChange) {
-					onChange(pmDocToRemarkup(next.doc));
+					onChange(pmDocToRemarkup(next.doc, { escapePlainText }));
 				}
 				const trigger = detectTrigger(next);
 				if (trigger) {

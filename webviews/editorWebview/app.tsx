@@ -843,7 +843,7 @@ function EditableMarkupSection({
 			{editing ? (
 				<>
 					<Suspense fallback={<div className="composer-loading">Loading editor…</div>}>
-						<RemarkupComposer initialValue={value} onChange={setDraft} disabled={busy} />
+						<RemarkupComposer initialValue={value} onChange={setDraft} disabled={busy} escapePlainText={false} />
 					</Suspense>
 					<div className="section-edit-actions">
 						<button

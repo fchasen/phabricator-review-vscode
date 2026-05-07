@@ -134,7 +134,7 @@ test('createRevision builds the expected transaction sequence', async () => {
 
 	const decoded = decodeBody(calls[0].body);
 	const types = decoded.params.transactions.map((t) => t.type);
-	assert.deepEqual(types, ['update', 'title', 'summary', 'test-plan', 'reviewers.add', 'bugzilla.bug-id']);
+	assert.deepEqual(types, ['update', 'title', 'summary', 'testPlan', 'reviewers.add', 'bugzilla.bug-id']);
 	assert.equal(decoded.params.objectIdentifier, undefined);
 	const bug = decoded.params.transactions.find((t) => t.type === 'bugzilla.bug-id');
 	assert.equal(bug.value, '1234567');
