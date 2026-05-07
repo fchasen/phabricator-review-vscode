@@ -1128,24 +1128,28 @@ export function App() {
 
 					<section className="actions">
 						<h3>Review</h3>
-						<button
-							className="action action-primary action-accept"
-							disabled={busy}
-							onClick={() => submit('accept')}
-							title="Accept this revision (publishes any draft inline comments)"
-						>
-							<span className="action-icon"><i className="codicon codicon-check" /></span>
-							<span>Accept</span>
-						</button>
-						<button
-							className="action action-warn"
-							disabled={busy}
-							onClick={() => submit('requestChanges')}
-							title="Block on changes"
-						>
-							<span className="action-icon"><i className="codicon codicon-warning" /></span>
-							<span>Request changes</span>
-						</button>
+						{!payload.isAuthor && (
+							<>
+								<button
+									className="action action-primary action-accept"
+									disabled={busy}
+									onClick={() => submit('accept')}
+									title="Accept this revision (publishes any draft inline comments)"
+								>
+									<span className="action-icon"><i className="codicon codicon-check" /></span>
+									<span>Accept</span>
+								</button>
+								<button
+									className="action action-warn"
+									disabled={busy}
+									onClick={() => submit('requestChanges')}
+									title="Block on changes"
+								>
+									<span className="action-icon"><i className="codicon codicon-warning" /></span>
+									<span>Request changes</span>
+								</button>
+							</>
+						)}
 
 						<div className="actions-destructive">
 							{payload.isAuthor && (
