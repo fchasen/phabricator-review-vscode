@@ -16,6 +16,7 @@ eslint.config.*
 tsconfig*.json
 webpack.config.js
 package-lock.json
+*.vsix
 CLAUDE.md
 remark-pm-readme.md
 .playwright-mcp/**

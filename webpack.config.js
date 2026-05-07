@@ -20,7 +20,7 @@ function makeConfig(opts) {
 			libraryTarget: opts.target === 'node' ? 'commonjs2' : undefined,
 			devtoolModuleFilenameTemplate: '../[resource-path]',
 		},
-		devtool: opts.mode === 'production' ? 'source-map' : 'eval-source-map',
+		devtool: opts.mode === 'production' ? 'hidden-source-map' : 'eval-source-map',
 		externals: opts.externals,
 		resolve: {
 			extensions: ['.ts', '.tsx', '.js', '.jsx'],
