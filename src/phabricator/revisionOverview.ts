@@ -71,6 +71,7 @@ interface OverviewPayload {
 		comments: Array<{ phid: string; content: string; contentHtml: string; dateCreated: number }>;
 		inline?: InlineLink;
 	}>;
+	phidNames: Record<string, string>;
 }
 
 interface InlineLink {
@@ -405,9 +406,16 @@ export class RevisionOverviewPanel extends WebviewBase {
 		(revision.attachments.subscribers?.subscriberPHIDs || []).forEach((p) => phidsToResolve.add(p));
 		const projectPHIDs = revision.attachments.projects?.projectPHIDs || [];
 		projectPHIDs.forEach((p) => phidsToResolve.add(p));
-		transactions.forEach((t: Transaction) => phidsToResolve.add(t.authorPHID));
+		transactions.forEach((t: Transaction) => {
+			phidsToResolve.add(t.authorPHID);
+			collectPhids(t.fields, phidsToResolve);
+		});
 		if (resolver) {
 			await resolver.resolveMany(Array.from(phidsToResolve));
+		}
+		const phidNames: Record<string, string> = {};
+		for (const phid of phidsToResolve) {
+			if (resolver) phidNames[phid] = resolver.displayName(phid);
 		}
 
 		const summary = revision.fields.summary || '';
@@ -558,6 +566,7 @@ export class RevisionOverviewPanel extends WebviewBase {
 						})),
 					inline: extractInlineLink(t, statusByPath, changesetByPath, flatByChangeset, activeDiffPHID),
 				})),
+			phidNames,
 		};
 	}
 
@@ -883,6 +892,21 @@ function runSearchfoxLivePicker(mode: Mode): Promise<{ url: string; text: string
 
 function runSearchfoxPathPicker(): Promise<{ url: string; text: string } | null> {
 	return runSearchfoxLivePicker('path');
+}
+
+function collectPhids(value: unknown, out: Set<string>): void {
+	if (!value) return;
+	if (typeof value === 'string') {
+		if (value.startsWith('PHID-')) out.add(value);
+		return;
+	}
+	if (Array.isArray(value)) {
+		for (const v of value) collectPhids(v, out);
+		return;
+	}
+	if (typeof value === 'object') {
+		for (const v of Object.values(value as Record<string, unknown>)) collectPhids(v, out);
+	}
 }
 
 function runSearchfoxSymbolPicker(): Promise<{ url: string; text: string } | null> {

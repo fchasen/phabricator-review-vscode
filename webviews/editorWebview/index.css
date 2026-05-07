@@ -366,6 +366,45 @@ body {
 .timeline > ul > li > header em { font-style: normal; opacity: 0.75; }
 .timeline > ul > li > header time { margin-left: auto; opacity: 0.55; font-size: 0.85em; }
 
+/* Activity icon (used on non-comment transactions in place of an avatar) */
+.timeline .tx-icon {
+	display: inline-flex; align-items: center; justify-content: center;
+	width: 20px; height: 20px;
+	flex: none;
+	color: var(--vscode-descriptionForeground);
+}
+.timeline .tx-icon .codicon { font-size: 14px; }
+.timeline > ul > li.tx-differential-action-accept .tx-icon { color: var(--vscode-testing-iconPassed, var(--vscode-gitDecoration-addedResourceForeground)); }
+.timeline > ul > li.tx-differential-action-reject .tx-icon { color: var(--vscode-testing-iconFailed, var(--vscode-gitDecoration-deletedResourceForeground)); }
+.timeline > ul > li.tx-differential-action-abandon .tx-icon,
+.timeline > ul > li.tx-differential-action-rethink .tx-icon { color: var(--vscode-editorWarning-foreground); }
+
+/* Inline body fragments rendered next to the verb */
+.timeline .tx-frags { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+.timeline .tx-frag { display: inline-flex; align-items: center; gap: 4px; }
+.timeline .tx-frag.muted { opacity: 0.7; }
+.timeline .tx-frag-label { opacity: 0.6; font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.04em; }
+.timeline .tx-mention { color: var(--vscode-textLink-foreground); }
+.timeline .tx-tag {
+	color: var(--vscode-textLink-foreground);
+	background: color-mix(in srgb, var(--vscode-textLink-foreground) 12%, transparent);
+	border-radius: 3px;
+	padding: 0 5px;
+	font-size: 0.9em;
+}
+.timeline .tx-badge {
+	margin-left: 4px;
+	padding: 0 5px;
+	border-radius: 3px;
+	font-size: 0.75em;
+	background: color-mix(in srgb, var(--vscode-editorWarning-foreground) 18%, transparent);
+	color: var(--vscode-editorWarning-foreground);
+}
+.timeline .tx-oldnew { display: inline-flex; align-items: center; gap: 6px; }
+.timeline .tx-oldnew .codicon { font-size: 11px; opacity: 0.55; }
+.timeline .tx-oldnew .tx-old { opacity: 0.6; text-decoration: line-through; }
+.timeline .tx-oldnew .tx-new { font-weight: 500; }
+
 /* Avatar */
 .avatar {
 	display: inline-flex; align-items: center; justify-content: center;

@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type
 import { ready, subscribe, request } from '../common/message';
 import { Remarkup } from '../common/remarkup';
 import { transactionLabel } from '../common/txLabels';
+import { TxBody, TxIcon } from '../common/txBody';
 
 const RemarkupComposer = lazy(() =>
 	import('../common/remarkupComposer').then((m) => ({ default: m.RemarkupComposer })),
@@ -93,6 +94,7 @@ interface TimelineEntry {
 	authorPHID: string;
 	authorName: string;
 	dateCreated: number;
+	fields: Record<string, unknown>;
 	comments: Array<{ phid: string; content: string; contentHtml: string }>;
 	inline?: InlineAnchor;
 }
@@ -118,6 +120,7 @@ interface OverviewPayload {
 	files: FileEntry[];
 	projects: ProjectTag[];
 	timeline: TimelineEntry[];
+	phidNames: Record<string, string>;
 }
 
 const REVIEWER_STATE_ICON: Record<string, string> = {
@@ -787,6 +790,11 @@ export function App() {
 		return map;
 	}, [payload]);
 
+	const nameOf = useCallback(
+		(phid: string) => payload?.phidNames?.[phid] || phid,
+		[payload],
+	);
+
 	const openReply = useCallback((txId: string | null) => {
 		if (!txId) return;
 		setActiveReplyTxId(txId);
@@ -911,9 +919,18 @@ export function App() {
 											className={`tx tx-${String(tx.type || 'unknown').replace(/[.:]/g, '-')}`}
 										>
 											<header>
-												{isComment && <Avatar phid={tx.authorPHID} name={tx.authorName} size={28} />}
+												{isComment ? (
+													<Avatar phid={tx.authorPHID} name={tx.authorName} size={28} />
+												) : (
+													<span className="tx-icon" aria-hidden="true">
+														<TxIcon type={tx.type} />
+													</span>
+												)}
 												<strong>{tx.authorName}</strong>
 												<em>{transactionLabel(tx.type)}</em>
+												{!isComment && (
+													<TxBody type={tx.type} fields={tx.fields} nameOf={nameOf} />
+												)}
 												<time>{new Date(tx.dateCreated * 1000).toLocaleString()}</time>
 												{canReplyHere && !isReplying && (
 													<button
