@@ -63,15 +63,62 @@ const ICONS: Record<string, string> = {
 	'space': 'globe',
 	'view': 'eye',
 	'edit': 'key',
+
+	'harbormaster:buildable': 'rocket',
+	'harbormaster.buildable': 'rocket',
+	'harbormaster:status': 'rocket',
 };
+
+const BUILD_STATUSES: Record<string, { label: string; tone: 'pass' | 'fail' | 'warn' | 'progress' | 'neutral' }> = {
+	'0': { label: 'Preparing', tone: 'progress' },
+	'1': { label: 'Building', tone: 'progress' },
+	'2': { label: 'Passed', tone: 'pass' },
+	'3': { label: 'Failed', tone: 'fail' },
+	'4': { label: 'Aborted', tone: 'warn' },
+	'5': { label: 'Error', tone: 'fail' },
+	'6': { label: 'Paused', tone: 'warn' },
+	'7': { label: 'Deadlocked', tone: 'fail' },
+	'preparing': { label: 'Preparing', tone: 'progress' },
+	'building': { label: 'Building', tone: 'progress' },
+	'passed': { label: 'Passed', tone: 'pass' },
+	'failed': { label: 'Failed', tone: 'fail' },
+	'aborted': { label: 'Aborted', tone: 'warn' },
+	'error': { label: 'Error', tone: 'fail' },
+	'paused': { label: 'Paused', tone: 'warn' },
+	'deadlocked': { label: 'Deadlocked', tone: 'fail' },
+};
+
+function buildStatus(value: unknown): { label: string; tone: string } {
+	const key = value === null || value === undefined ? '' : String(value).toLowerCase();
+	return BUILD_STATUSES[key] || { label: key || 'unknown', tone: 'neutral' };
+}
 
 export function txIconName(type: string | null | undefined): string {
 	if (!type) return 'circle-small';
 	return ICONS[type] || 'circle-small';
 }
 
-export function TxIcon({ type }: { type: string | null | undefined }) {
-	return <i className={`codicon codicon-${txIconName(type)}`} aria-hidden="true" />;
+const BUILD_TONE_ICONS: Record<string, string> = {
+	pass: 'pass',
+	fail: 'error',
+	warn: 'warning',
+	progress: 'sync',
+	neutral: 'rocket',
+};
+
+function isBuildableType(type: string | null | undefined): boolean {
+	return type === 'harbormaster:buildable' || type === 'harbormaster.buildable' || type === 'harbormaster:status';
+}
+
+export function TxIcon({ type, fields }: { type: string | null | undefined; fields?: Record<string, unknown> | null }) {
+	let iconName = txIconName(type);
+	let toneClass = '';
+	if (isBuildableType(type)) {
+		const status = buildStatus((fields || {}).new);
+		iconName = BUILD_TONE_ICONS[status.tone] || iconName;
+		toneClass = ` tx-build-icon-${status.tone}`;
+	}
+	return <i className={`codicon codicon-${iconName}${toneClass}`} aria-hidden="true" />;
 }
 
 interface TxBodyProps {
@@ -241,10 +288,22 @@ export function TxBody({ type, fields, nameOf }: TxBodyProps): ReactNode {
 			);
 		}
 
-		case 'update': {
-			const newVal = asString(f.new);
-			if (!newVal) return null;
-			return <span className="tx-frag muted">to diff {trimText(newVal, 16)}</span>;
+		case 'harbormaster:buildable':
+		case 'harbormaster.buildable':
+		case 'harbormaster:status': {
+			const oldVal = buildStatus(f.old);
+			const newVal = buildStatus(f.new);
+			return (
+				<span className="tx-build">
+					{oldVal.label && oldVal.label !== newVal.label && (
+						<>
+							<span className={`tx-build-status tx-build-${oldVal.tone}`}>{oldVal.label}</span>
+							<i className="codicon codicon-arrow-right" aria-hidden="true" />
+						</>
+					)}
+					<span className={`tx-build-status tx-build-${newVal.tone}`}>{newVal.label}</span>
+				</span>
+			);
 		}
 
 		case 'core:columns': {

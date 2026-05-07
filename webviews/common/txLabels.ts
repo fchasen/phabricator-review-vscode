@@ -64,6 +64,10 @@ const LABELS: Record<string, string> = {
 	'space': 'changed the visibility space',
 	'view': 'changed view policy',
 	'edit': 'changed edit policy',
+
+	'harbormaster:buildable': 'reported a build',
+	'harbormaster.buildable': 'reported a build',
+	'harbormaster:status': 'reported a build',
 };
 
 export function transactionLabel(type: string | null | undefined): string {
