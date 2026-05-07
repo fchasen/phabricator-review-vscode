@@ -94,26 +94,45 @@ body {
 	outline-offset: 0;
 }
 
-.summary .summary-edit-button { font-size: 0.85em; }
-.summary-edit-actions {
+.section-edit-button {
+	flex: none;
+	display: inline-flex; align-items: center; justify-content: center;
+	width: 24px; height: 24px;
+	background: transparent;
+	color: var(--vscode-foreground);
+	border: 1px solid transparent;
+	border-radius: 3px;
+	cursor: pointer;
+	padding: 0;
+	font: inherit;
+	opacity: 0;
+}
+.summary:hover .section-edit-button,
+.summary:focus-within .section-edit-button,
+.test-plan:hover .section-edit-button,
+.test-plan:focus-within .section-edit-button { opacity: 0.85; }
+.section-edit-button.is-empty { opacity: 0.85; }
+.section-edit-button:hover { background: var(--vscode-toolbar-hoverBackground, rgba(127,127,127,0.15)); opacity: 1; }
+.section-edit-button .codicon { font-size: 14px; }
+.section-edit-actions {
 	display: flex; gap: 8px; margin-top: 8px;
 }
-.summary-edit-actions .action-link {
+.section-edit-actions .action-link {
 	background: transparent; border: 1px solid transparent;
 	color: var(--vscode-textLink-foreground);
 	cursor: pointer;
 	padding: 4px 8px;
 }
-.summary-edit-actions .action-link:hover {
+.section-edit-actions .action-link:hover {
 	color: var(--vscode-textLink-activeForeground);
 	text-decoration: underline;
 }
-.summary-edit-actions .action-link:disabled {
+.section-edit-actions .action-link:disabled {
 	color: var(--vscode-disabledForeground);
 	cursor: default;
 	text-decoration: none;
 }
-.summary-empty { font-style: italic; }
+.section-empty { font-style: italic; }
 
 /* Sidebar */
 .reviewers li {

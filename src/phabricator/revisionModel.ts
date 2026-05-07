@@ -319,10 +319,11 @@ export class RevisionModel {
 		await this.refresh();
 	}
 
-	public async editFields(fields: { title?: string; summary?: string }): Promise<void> {
+	public async editFields(fields: { title?: string; summary?: string; testPlan?: string }): Promise<void> {
 		const transactions: Array<{ type: string; value: unknown }> = [];
 		if (fields.title !== undefined) transactions.push({ type: 'title', value: fields.title });
 		if (fields.summary !== undefined) transactions.push({ type: 'summary', value: fields.summary });
+		if (fields.testPlan !== undefined) transactions.push({ type: 'test-plan', value: fields.testPlan });
 		if (transactions.length === 0) return;
 		await this._client.editRevision({
 			objectIdentifier: this._revision.phid,

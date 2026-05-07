@@ -774,69 +774,82 @@ function EditableTitle({ title, canEdit }: { title: string; canEdit: boolean }) 
 	);
 }
 
-function EditableSummary({
-	summary,
-	summaryHtml,
+function EditableMarkupSection({
+	field,
+	title,
+	sectionClass,
+	value,
+	html,
 	canEdit,
+	emptyButtonLabel,
+	emptyMessage,
+	editTitle,
 }: {
-	summary: string;
-	summaryHtml: string;
+	field: 'summary' | 'testPlan';
+	title: string;
+	sectionClass: string;
+	value: string;
+	html: string;
 	canEdit: boolean;
+	emptyButtonLabel: string;
+	emptyMessage: string;
+	editTitle: string;
 }) {
 	const [editing, setEditing] = useState(false);
-	const [draft, setDraft] = useState(summary);
+	const [draft, setDraft] = useState(value);
 	const [busy, setBusy] = useState(false);
 
 	useEffect(() => {
-		if (!editing) setDraft(summary);
-	}, [summary, editing]);
+		if (!editing) setDraft(value);
+	}, [value, editing]);
 
 	const begin = () => {
-		setDraft(summary);
+		setDraft(value);
 		setEditing(true);
 	};
 	const cancel = () => setEditing(false);
 	const save = async () => {
-		if (draft === summary) {
+		if (draft === value) {
 			cancel();
 			return;
 		}
 		setBusy(true);
 		try {
-			const ok = await request<boolean>('editRevision', { summary: draft });
+			const ok = await request<boolean>('editRevision', { [field]: draft });
 			if (ok) setEditing(false);
 		} finally {
 			setBusy(false);
 		}
 	};
 
-	if (!summary && !canEdit) return null;
+	if (!value && !canEdit) return null;
 
 	return (
-		<section className="summary">
+		<section className={sectionClass}>
 			<div className="section-head">
-				<h2>Summary</h2>
+				<h2>{title}</h2>
 				{canEdit && !editing && (
 					<button
 						type="button"
-						className="link-button summary-edit-button"
-						title="Edit summary"
+						className={`section-edit-button${value ? '' : ' is-empty'}`}
+						title={value ? editTitle : emptyButtonLabel}
+						aria-label={value ? editTitle : emptyButtonLabel}
 						onClick={begin}
 					>
-						{summary ? 'Edit' : 'Add summary'}
+						<i className={`codicon codicon-${value ? 'edit' : 'add'}`} />
 					</button>
 				)}
 			</div>
 			{editing ? (
 				<>
 					<Suspense fallback={<div className="composer-loading">Loading editor…</div>}>
-						<RemarkupComposer initialValue={summary} onChange={setDraft} disabled={busy} />
+						<RemarkupComposer initialValue={value} onChange={setDraft} disabled={busy} />
 					</Suspense>
-					<div className="summary-edit-actions">
+					<div className="section-edit-actions">
 						<button
 							type="button"
 							className="action action-secondary"
-							disabled={busy || draft === summary}
+							disabled={busy || draft === value}
 							onClick={save}
 						>
 							<span>Save</span>
@@ -851,10 +864,10 @@ function EditableSummary({
 						</button>
 					</div>
 				</>
-			) : summary ? (
-				<Remarkup html={summaryHtml} source={summary} />
+			) : value ? (
+				<Remarkup html={html} source={value} />
 			) : (
-				<p className="summary-empty muted">No summary yet.</p>
+				<p className="section-empty muted">{emptyMessage}</p>
 			)}
 		</section>
 	);
@@ -980,18 +993,28 @@ export function App() {
 							)}
 						</div>
 					</header>
-					<EditableSummary
-						summary={payload.summary}
-						summaryHtml={payload.summaryHtml}
+					<EditableMarkupSection
+						field="summary"
+						title="Summary"
+						sectionClass="summary"
+						value={payload.summary}
+						html={payload.summaryHtml}
 						canEdit={payload.isAuthor}
+						emptyButtonLabel="Add summary"
+						emptyMessage="No summary yet."
+						editTitle="Edit summary"
 					/>
-
-					{payload.testPlan && (
-						<section className="test-plan">
-							<h2>Test plan</h2>
-							<Remarkup html={payload.testPlanHtml} source={payload.testPlan} />
-						</section>
-					)}
+					<EditableMarkupSection
+						field="testPlan"
+						title="Test plan"
+						sectionClass="test-plan"
+						value={payload.testPlan}
+						html={payload.testPlanHtml}
+						canEdit={payload.isAuthor}
+						emptyButtonLabel="Add test plan"
+						emptyMessage="No test plan yet."
+						editTitle="Edit test plan"
+					/>
 
 					<section className="timeline">
 						<div className="section-head">

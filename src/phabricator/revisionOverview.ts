@@ -298,7 +298,7 @@ export class RevisionOverviewPanel extends WebviewBase {
 				}
 			}
 			case 'editRevision': {
-				const args = (message.args || {}) as { title?: string; summary?: string };
+				const args = (message.args || {}) as { title?: string; summary?: string; testPlan?: string };
 				try {
 					await this._model.editFields(args);
 					return this._replyMessage(message, true);
