@@ -41,6 +41,34 @@ test('searchRevisions flattens constraints into params', async () => {
 	assert.deepEqual(decoded.params.attachments, { reviewers: true });
 });
 
+test('querySubscribedRevisionPHIDs uses differential.query subscribers', async () => {
+	const { fetchImpl, calls } = mockFetch([
+		{
+			body: {
+				result: [
+					{ phid: 'PHID-DREV-1' },
+					{ phid: 'PHID-DREV-2' },
+					{ phid: 'PHID-DREV-1' },
+					{ phid: null },
+				],
+				error_code: null,
+				error_info: null,
+			},
+		},
+	]);
+	const client = new PhabricatorClient({ token: 't', fetch: fetchImpl });
+
+	const out = await client.querySubscribedRevisionPHIDs('PHID-USER-me', { limit: 25 });
+
+	assert.deepEqual(out, ['PHID-DREV-1', 'PHID-DREV-2']);
+	const decoded = decodeBody(calls[0].body);
+	assert.equal(calls[0].url.endsWith('differential.query'), true);
+	assert.deepEqual(decoded.params.subscribers, ['PHID-USER-me']);
+	assert.equal(decoded.params.status, 'status-open');
+	assert.equal(decoded.params.order, 'order-modified');
+	assert.equal(decoded.params.limit, 25);
+});
+
 test('comment posts a single comment transaction', async () => {
 	const { fetchImpl, calls } = mockFetch([
 		{ body: { result: { object: 'PHID-DREV-1', transactions: [] }, error_code: null, error_info: null } },

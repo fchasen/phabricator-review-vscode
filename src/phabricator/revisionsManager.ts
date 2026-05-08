@@ -5,7 +5,7 @@ import Logger, { REVISION_TREE } from '../common/logger';
 import { UserResolver } from './userResolver';
 import { RevisionModel } from './revisionModel';
 import { LocalGitResolver } from './localGitResolver';
-import type { Revision, RevisionStatus } from '../client';
+import type { Revision, RevisionConstraints, RevisionStatus } from '../client';
 
 export type CategoryKey = 'mine' | 'reviewer' | 'subscriber' | 'closed';
 
@@ -19,6 +19,14 @@ export const CATEGORIES: CategoryDefinition[] = [
 	{ key: 'reviewer', label: 'Needs My Review' },
 	{ key: 'subscriber', label: 'Subscribed' },
 	{ key: 'closed', label: 'Recently Closed' },
+];
+
+const ACTIVE_REVISION_STATUSES: RevisionStatus[] = [
+	'needs-review',
+	'accepted',
+	'needs-revision',
+	'changes-planned',
+	'draft',
 ];
 
 export class RevisionsManager extends Disposable {
@@ -108,8 +116,24 @@ export class RevisionsManager extends Disposable {
 		if (!constraints) {
 			return [];
 		}
-		const revisions: Revision[] = [];
 		const limit = category === 'closed' ? 25 : 100;
+		const revisions = category === 'subscriber'
+			? await this._getSubscribedRevisions(session, constraints, limit)
+			: await this._searchRevisions(session, constraints, limit);
+		let models = revisions.map((r) => this._adopt(r));
+		if (category === 'reviewer') {
+			models = models.filter((m) => m.authorPHID !== session.userPHID);
+		}
+		this._categoryCache.set(category, models);
+		return models;
+	}
+
+	private async _searchRevisions(
+		session: PhabSession,
+		constraints: RevisionConstraints,
+		limit: number,
+	): Promise<Revision[]> {
+		const revisions: Revision[] = [];
 		for await (const revision of session.client.searchRevisions(
 			constraints,
 			{ reviewers: true, subscribers: true, projects: true },
@@ -120,12 +144,30 @@ export class RevisionsManager extends Disposable {
 				break;
 			}
 		}
-		let models = revisions.map((r) => this._adopt(r));
-		if (category === 'reviewer') {
-			models = models.filter((m) => m.authorPHID !== session.userPHID);
+		return revisions;
+	}
+
+	private async _getSubscribedRevisions(
+		session: PhabSession,
+		constraints: RevisionConstraints,
+		limit: number,
+	): Promise<Revision[]> {
+		const revisions = await this._searchRevisions(session, constraints, limit);
+		if (revisions.length > 0) {
+			return revisions;
 		}
-		this._categoryCache.set(category, models);
-		return models;
+		try {
+			const phids = await session.client.querySubscribedRevisionPHIDs(session.userPHID, { limit });
+			if (phids.length === 0) {
+				return [];
+			}
+			const byOrder = new Map(phids.map((phid, index) => [phid, index]));
+			const fetched = await this._searchRevisions(session, { phids }, limit);
+			return fetched.sort((a, b) => (byOrder.get(a.phid) ?? 0) - (byOrder.get(b.phid) ?? 0));
+		} catch (err) {
+			Logger.warn(`Failed to load subscribed revisions with legacy API: ${err instanceof Error ? err.message : err}`, REVISION_TREE);
+			return revisions;
+		}
 	}
 
 	public getRevisionByPHID(phid: string): RevisionModel | undefined {
@@ -197,7 +239,7 @@ export class RevisionsManager extends Disposable {
 			case 'mine':
 				return {
 					authorPHIDs: [userPHID],
-					statuses: ['needs-review', 'accepted', 'needs-revision', 'changes-planned', 'draft'] as RevisionStatus[],
+					statuses: ACTIVE_REVISION_STATUSES,
 				};
 			case 'reviewer':
 				return {
@@ -207,7 +249,7 @@ export class RevisionsManager extends Disposable {
 			case 'subscriber':
 				return {
 					subscribers: [userPHID],
-					statuses: ['needs-review', 'accepted', 'needs-revision'] as RevisionStatus[],
+					statuses: ACTIVE_REVISION_STATUSES,
 				};
 			case 'closed':
 				return {

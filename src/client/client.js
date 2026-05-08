@@ -135,6 +135,18 @@ class PhabricatorClient {
 		return next.done ? undefined : next.value;
 	}
 
+	async querySubscribedRevisionPHIDs(userPHID, opts) {
+		const result = await this.call('differential.query', {
+			subscribers: [userPHID],
+			status: (opts && opts.status) || 'status-open',
+			order: 'order-modified',
+			limit: opts && opts.limit,
+		});
+		return Array.from(new Set(result
+			.map((revision) => revision && revision.phid)
+			.filter((phid) => typeof phid === 'string')));
+	}
+
 	// --------------------------------------------------------------------- diffs
 
 	/**
