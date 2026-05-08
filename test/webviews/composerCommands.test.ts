@@ -77,6 +77,15 @@ test('toggleList wraps a paragraph with text in a bullet list', () => {
 	assert.equal(pmDocToRemarkup(next.doc), '- hello world');
 });
 
+test('pmDocToRemarkup serializes bullet list items without blank lines', () => {
+	const list = remarkupSchema.nodes.bullet_list.create(null, [
+		listItem('one'),
+		listItem('two'),
+	]);
+
+	assert.equal(pmDocToRemarkup(docOf([list])), '- one\n- two');
+});
+
 test('toggleList on an existing bullet item lifts it back to a paragraph', () => {
 	const list = remarkupSchema.nodes.bullet_list.create(null, [listItem('one')]);
 	const state = makeState(docOf([list]));
@@ -94,6 +103,15 @@ test('toggleList wraps a paragraph in an ordered list', () => {
 	assert.equal(ok, true);
 	assert.equal(topNode(next.doc)!.type.name, 'ordered_list');
 	assert.equal(pmDocToRemarkup(next.doc), '1. first');
+});
+
+test('pmDocToRemarkup serializes ordered list items without blank lines', () => {
+	const list = remarkupSchema.nodes.ordered_list.create({ start: 1 }, [
+		listItem('one'),
+		listItem('two'),
+	]);
+
+	assert.equal(pmDocToRemarkup(docOf([list])), '1. one\n2. two');
 });
 
 // ---------------------------------------------------------------- mark toggles

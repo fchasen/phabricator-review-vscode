@@ -85,7 +85,7 @@ function inlineChildren(state: State, node: Node): string {
 }
 
 function blockToRemarkup(state: State, node: Node, isFirstSibling: boolean): void {
-	if (!isFirstSibling) state.out += '\n\n';
+	if (!isFirstSibling) state.out += node.type.name === 'list_item' ? '\n' : '\n\n';
 
 	switch (node.type.name) {
 		case 'paragraph': {
