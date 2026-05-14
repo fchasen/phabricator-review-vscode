@@ -39,7 +39,24 @@ function loadPierre(): Promise<PierreModule> {
 interface ProjectTag {
 	phid: string;
 	displayName: string;
+	slug: string | null;
 }
+
+interface TestingTagOption {
+	slug: string;
+	title: string;
+	codicon: string;
+}
+
+const TESTING_TAG_OPTIONS: TestingTagOption[] = [
+	{ slug: 'testing-approved', title: 'Tests approved', codicon: 'pass-filled' },
+	{ slug: 'testing-exception-unchanged', title: 'No behavior change', codicon: 'dash' },
+	{ slug: 'testing-exception-ui', title: 'UI only', codicon: 'device-desktop' },
+	{ slug: 'testing-exception-elsewhere', title: 'Tested elsewhere', codicon: 'link-external' },
+	{ slug: 'testing-exception-other', title: 'Exception (other)', codicon: 'question' },
+];
+
+const TESTING_TAG_SLUG_SET = new Set(TESTING_TAG_OPTIONS.map((t) => t.slug));
 
 interface FileInlineComment {
 	commentPHID: string;
@@ -135,6 +152,7 @@ interface OverviewPayload {
 	subscribers: string[];
 	files: FileEntry[];
 	projects: ProjectTag[];
+	testingTagSlug: string | null;
 	timeline: TimelineEntry[];
 	phidNames: Record<string, string>;
 }
@@ -873,6 +891,110 @@ function EditableMarkupSection({
 	);
 }
 
+interface TestingTagPickerProps {
+	currentSlug: string | null;
+	busy: boolean;
+	onSelect: (slug: string) => void;
+	onClear: () => void;
+}
+
+function TestingTagPicker({ currentSlug, busy, onSelect, onClear }: TestingTagPickerProps) {
+	const [open, setOpen] = useState(false);
+	const wrapperRef = useRef<HTMLDivElement | null>(null);
+	const current = TESTING_TAG_OPTIONS.find((t) => t.slug === currentSlug);
+
+	useEffect(() => {
+		if (!open) return;
+		const onDocPointer = (e: MouseEvent) => {
+			if (!wrapperRef.current) return;
+			if (!wrapperRef.current.contains(e.target as Node)) {
+				setOpen(false);
+			}
+		};
+		const onKey = (e: globalThis.KeyboardEvent) => {
+			if (e.key === 'Escape') setOpen(false);
+		};
+		document.addEventListener('mousedown', onDocPointer);
+		document.addEventListener('keydown', onKey);
+		return () => {
+			document.removeEventListener('mousedown', onDocPointer);
+			document.removeEventListener('keydown', onKey);
+		};
+	}, [open]);
+
+	const choose = (slug: string) => {
+		setOpen(false);
+		if (slug !== currentSlug) onSelect(slug);
+	};
+
+	const clear = () => {
+		setOpen(false);
+		onClear();
+	};
+
+	return (
+		<div className="action-menu-wrapper" ref={wrapperRef}>
+			<button
+				type="button"
+				className={`action action-testing${open ? ' is-open' : ''}`}
+				disabled={busy}
+				aria-haspopup="menu"
+				aria-expanded={open}
+				onClick={() => setOpen((v) => !v)}
+				title={current ? 'Change testing status' : 'Set testing status'}
+			>
+				<span className="action-icon">
+					<i className={`codicon codicon-${current?.codicon ?? 'beaker'}`} />
+				</span>
+				<span className="action-label">{current?.title ?? 'Set testing status'}</span>
+				<i className="codicon codicon-chevron-down action-caret" />
+			</button>
+			{open && (
+				<ul className="action-menu" role="menu">
+					{TESTING_TAG_OPTIONS.map((opt) => {
+						const isCurrent = opt.slug === currentSlug;
+						return (
+							<li key={opt.slug} role="none">
+								<button
+									type="button"
+									role="menuitem"
+									className={`action-menu-item${isCurrent ? ' is-current' : ''}`}
+									disabled={isCurrent}
+									onClick={() => choose(opt.slug)}
+								>
+									<span className="action-icon">
+										<i className={`codicon codicon-${opt.codicon}`} />
+									</span>
+									<span className="action-label">{opt.title}</span>
+									{isCurrent && <i className="codicon codicon-check action-current-mark" />}
+								</button>
+							</li>
+						);
+					})}
+					{current && (
+						<>
+							<li role="separator" className="action-menu-separator" />
+							<li role="none">
+								<button
+									type="button"
+									role="menuitem"
+									className="action-menu-item action-menu-clear"
+									onClick={clear}
+								>
+									<span className="action-icon">
+										<i className="codicon codicon-circle-slash" />
+									</span>
+									<span className="action-label">Clear</span>
+								</button>
+							</li>
+						</>
+					)}
+				</ul>
+			)}
+		</div>
+	);
+}
+
 export function App() {
 	const [payload, setPayload] = useState<OverviewPayload | undefined>();
 	const [comment, setComment] = useState('');
@@ -1171,6 +1293,20 @@ export function App() {
 									<span className="action-icon"><i className="codicon codicon-warning" /></span>
 									<span>Request changes</span>
 								</button>
+								{payload.isReviewer && (
+									<TestingTagPicker
+										currentSlug={payload.testingTagSlug}
+										busy={busy}
+										onSelect={(slug) => {
+											setBusy(true);
+											void request<boolean>('setTestingTag', { slug }).finally(() => setBusy(false));
+										}}
+										onClear={() => {
+											setBusy(true);
+											void request<boolean>('clearTestingTag').finally(() => setBusy(false));
+										}}
+									/>
+								)}
 							</>
 						)}
 
@@ -1233,23 +1369,30 @@ export function App() {
 						)}
 					</section>
 
-					<section className="projects">
-						<div className="section-head">
-							<h3>Projects ({payload.projects.length})</h3>
-							<button className="link-button" onClick={editProjects} title="Add a project tag">
-								Add
-							</button>
-						</div>
-						{payload.projects.length === 0 ? (
-							<p className="muted">No tags</p>
-						) : (
-							<ul className="tags">
-								{payload.projects.map((p) => (
-									<li key={p.phid} className="tag" title={p.displayName}>#{p.displayName}</li>
-								))}
-							</ul>
-						)}
-					</section>
+					{(() => {
+						const visibleProjects = payload.isReviewer
+							? payload.projects.filter((p) => !p.slug || !TESTING_TAG_SLUG_SET.has(p.slug))
+							: payload.projects;
+						return (
+							<section className="projects">
+								<div className="section-head">
+									<h3>Projects ({visibleProjects.length})</h3>
+									<button className="link-button" onClick={editProjects} title="Add a project tag">
+										Add
+									</button>
+								</div>
+								{visibleProjects.length === 0 ? (
+									<p className="muted">No tags</p>
+								) : (
+									<ul className="tags">
+										{visibleProjects.map((p) => (
+											<li key={p.phid} className="tag" title={p.displayName}>#{p.displayName}</li>
+										))}
+									</ul>
+								)}
+							</section>
+						);
+					})()}
 
 					{payload.stack && (payload.stack.parents.length > 0 || payload.stack.children.length > 0) && (
 						<StackPanel

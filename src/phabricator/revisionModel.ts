@@ -5,6 +5,7 @@ import { synthesizeSideFromCorpus } from '../common/diffHunk';
 import { sanitizeRenderedHtml, rewriteRelativeUrls } from '../common/htmlSanitize';
 import { UserResolver } from './userResolver';
 import { LocalGitResolver } from './localGitResolver';
+import { matchTestingTag } from './testingTag';
 
 export class RevisionModel {
 	private readonly _onDidChange = new vscode.EventEmitter<void>();
@@ -317,6 +318,50 @@ export class RevisionModel {
 			transactions: [{ type: 'projects.set', value: projectPHIDs }],
 		});
 		await this.refresh();
+	}
+
+	public async setTestingTag(newPHID: string): Promise<void> {
+		const appliedTesting = await this._appliedTestingTagPHIDs();
+		const toRemove = appliedTesting.filter((p) => p !== newPHID);
+		const alreadyApplied = appliedTesting.includes(newPHID);
+		if (alreadyApplied && toRemove.length === 0) {
+			return;
+		}
+		const transactions: Array<{ type: string; value: unknown }> = [];
+		if (toRemove.length > 0) {
+			transactions.push({ type: 'projects.remove', value: toRemove });
+		}
+		if (!alreadyApplied) {
+			transactions.push({ type: 'projects.add', value: [newPHID] });
+		}
+		await this._client.editRevision({
+			objectIdentifier: this._revision.phid,
+			transactions,
+		});
+		await this.refresh();
+	}
+
+	public async clearTestingTag(): Promise<void> {
+		const applied = await this._appliedTestingTagPHIDs();
+		if (applied.length === 0) return;
+		await this._client.editRevision({
+			objectIdentifier: this._revision.phid,
+			transactions: [{ type: 'projects.remove', value: applied }],
+		});
+		await this.refresh();
+	}
+
+	private async _appliedTestingTagPHIDs(): Promise<string[]> {
+		const phids = this._revision.attachments.projects?.projectPHIDs ?? [];
+		if (phids.length === 0) return [];
+		const unresolved = phids.filter((p) => !this.userResolver.getProject(p));
+		if (unresolved.length > 0) {
+			await this.userResolver.resolveMany(unresolved);
+		}
+		return phids.filter((p) => {
+			const project = this.userResolver.getProject(p);
+			return project ? matchTestingTag(project) !== null : false;
+		});
 	}
 
 	public async editFields(fields: { title?: string; summary?: string; testPlan?: string }): Promise<void> {

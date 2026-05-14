@@ -53,6 +53,14 @@ export class UserResolver {
 		return this._projects.has(phid);
 	}
 
+	public projectSlug(phid: string): string | null {
+		return this._projects.get(phid)?.fields.slug || null;
+	}
+
+	public getProject(phid: string): Project | undefined {
+		return this._projects.get(phid);
+	}
+
 	public clear(): void {
 		this._users.clear();
 		this._projects.clear();

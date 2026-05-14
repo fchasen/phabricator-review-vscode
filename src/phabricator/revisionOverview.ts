@@ -9,6 +9,7 @@ import { changesetStatus } from '../view/treeNodes/fileChangeNode';
 import { flexibleBool } from '../common/flexibleBool';
 import Logger from '../common/logger';
 import { UserResolver } from './userResolver';
+import { matchTestingTag, isTestingTagSlug } from './testingTag';
 
 interface StackEntry {
 	id: number;
@@ -53,7 +54,8 @@ interface OverviewPayload {
 		isBlocking: boolean;
 	}>;
 	subscribers: string[];
-	projects: Array<{ phid: string; displayName: string }>;
+	projects: Array<{ phid: string; displayName: string; slug: string | null }>;
+	testingTagSlug: string | null;
 	files: Array<{
 		path: string;
 		oldPath: string | null;
@@ -297,6 +299,32 @@ export class RevisionOverviewPanel extends WebviewBase {
 					return this._throwError(message, err instanceof Error ? err.message : String(err));
 				}
 			}
+			case 'setTestingTag': {
+				const args = (message.args || {}) as { slug?: string };
+				const slug = args.slug;
+				if (!slug || !isTestingTagSlug(slug)) {
+					return this._throwError(message, `Unknown testing tag: ${slug ?? '(missing)'}`);
+				}
+				try {
+					await this._manager.loadTestingTagDirectory();
+					const phid = this._manager.testingTagPHID(slug);
+					if (!phid) {
+						return this._throwError(message, `Couldn't resolve #${slug} in Phabricator.`);
+					}
+					await this._model.setTestingTag(phid);
+					return this._replyMessage(message, true);
+				} catch (err) {
+					return this._throwError(message, err instanceof Error ? err.message : String(err));
+				}
+			}
+			case 'clearTestingTag': {
+				try {
+					await this._model.clearTestingTag();
+					return this._replyMessage(message, true);
+				} catch (err) {
+					return this._throwError(message, err instanceof Error ? err.message : String(err));
+				}
+			}
 			case 'editRevision': {
 				const args = (message.args || {}) as { title?: string; summary?: string; testPlan?: string };
 				try {
@@ -432,7 +460,12 @@ export class RevisionOverviewPanel extends WebviewBase {
 		reviewerEntries.forEach((r) => phidsToResolve.add(r.reviewerPHID));
 		const myPHID = this._manager.session?.userPHID;
 		const isAuthor = !!myPHID && revision.fields.authorPHID === myPHID;
-		const isReviewer = !!myPHID && reviewerEntries.some((r) => r.reviewerPHID === myPHID);
+		const projectMembership = new Set(this._manager.projectMembership);
+		const isReviewer =
+			!!myPHID &&
+			reviewerEntries.some(
+				(r) => r.reviewerPHID === myPHID || projectMembership.has(r.reviewerPHID),
+			);
 		(revision.attachments.subscribers?.subscriberPHIDs || []).forEach((p) => phidsToResolve.add(p));
 		const projectPHIDs = revision.attachments.projects?.projectPHIDs || [];
 		projectPHIDs.forEach((p) => phidsToResolve.add(p));
@@ -442,6 +475,16 @@ export class RevisionOverviewPanel extends WebviewBase {
 		});
 		if (resolver) {
 			await resolver.resolveMany(Array.from(phidsToResolve));
+		}
+		let appliedTestingTagSlug: string | null = null;
+		for (const phid of projectPHIDs) {
+			const project = resolver?.getProject(phid);
+			if (!project) continue;
+			const slug = matchTestingTag(project);
+			if (slug) {
+				appliedTestingTagSlug = slug;
+				break;
+			}
 		}
 		const phidNames: Record<string, string> = {};
 		for (const phid of phidsToResolve) {
@@ -554,7 +597,9 @@ export class RevisionOverviewPanel extends WebviewBase {
 			projects: projectPHIDs.map((phid) => ({
 				phid,
 				displayName: resolveDisplayName(phid, resolver),
+				slug: resolver?.projectSlug(phid) ?? null,
 			})),
+			testingTagSlug: appliedTestingTagSlug,
 			files: changesets.map((cs) => {
 				const newPath = cs.currentPath || cs.oldPath || '';
 				const oldPath = cs.oldPath || cs.currentPath || null;

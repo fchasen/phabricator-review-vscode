@@ -5,6 +5,7 @@ import Logger, { REVISION_TREE } from '../common/logger';
 import { UserResolver } from './userResolver';
 import { RevisionModel } from './revisionModel';
 import { LocalGitResolver } from './localGitResolver';
+import { TESTING_TAG_SLUGS, TestingTagSlug } from './testingTag';
 import type { Revision, RevisionConstraints, RevisionStatus } from '../client';
 
 export type CategoryKey = 'mine' | 'reviewer' | 'subscriber' | 'closed';
@@ -35,6 +36,8 @@ export class RevisionsManager extends Disposable {
 
 	private _userResolver: UserResolver | undefined;
 	private _projectMembership: string[] = [];
+	private readonly _testingTagPHIDs = new Map<TestingTagSlug, string>();
+	private _testingTagLoad: Promise<void> | undefined;
 	public readonly localGit = new LocalGitResolver();
 	private readonly _categoryCache = new Map<CategoryKey, RevisionModel[]>();
 	private readonly _byPHID = new Map<string, RevisionModel>();
@@ -48,6 +51,8 @@ export class RevisionsManager extends Disposable {
 				this._categoryCache.clear();
 				this._byPHID.clear();
 				this._byId.clear();
+				this._testingTagPHIDs.clear();
+				this._testingTagLoad = undefined;
 				this._userResolver = session ? new UserResolver(session.client) : undefined;
 				if (session) {
 					await this._loadProjectMembership(session);
@@ -91,6 +96,10 @@ export class RevisionsManager extends Disposable {
 
 	public get userResolver(): UserResolver | undefined {
 		return this._userResolver;
+	}
+
+	public get projectMembership(): readonly string[] {
+		return this._projectMembership;
 	}
 
 	public refresh(category?: CategoryKey): void {
@@ -259,6 +268,32 @@ export class RevisionsManager extends Disposable {
 			default:
 				return undefined;
 		}
+	}
+
+	public testingTagPHID(slug: TestingTagSlug): string | undefined {
+		return this._testingTagPHIDs.get(slug);
+	}
+
+	public loadTestingTagDirectory(): Promise<void> {
+		const session = this._credentials.session;
+		if (!session) return Promise.resolve();
+		const missing = TESTING_TAG_SLUGS.filter((s) => !this._testingTagPHIDs.has(s));
+		if (missing.length === 0) return Promise.resolve();
+		if (this._testingTagLoad) return this._testingTagLoad;
+		this._testingTagLoad = (async () => {
+			try {
+				const map = await session.client.resolveProjectsBySlug(missing);
+				for (const slug of missing) {
+					const project = map.get(slug);
+					if (project) this._testingTagPHIDs.set(slug, project.phid);
+				}
+			} catch (err) {
+				Logger.warn(`Testing tag lookup failed: ${err instanceof Error ? err.message : err}`, REVISION_TREE);
+			} finally {
+				this._testingTagLoad = undefined;
+			}
+		})();
+		return this._testingTagLoad;
 	}
 
 	private async _loadProjectMembership(session: PhabSession): Promise<void> {
