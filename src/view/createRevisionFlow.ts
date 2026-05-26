@@ -6,11 +6,11 @@ import { RevisionsManager } from '../phabricator/revisionsManager';
 import { RevisionOverviewPanel } from '../phabricator/revisionOverview';
 import { RevisionModel } from '../phabricator/revisionModel';
 import Logger from '../common/logger';
+import { parseCommitMetadata, ParsedReviewers } from '../phabricator/commitMetadata';
 
 const execFileAsync = promisify(execFile);
 
 const COMPONENT = 'CreateRevision';
-const BUG_RE = /^Bug\s+(\d{5,8})/im;
 
 interface CommitPick extends vscode.QuickPickItem {
 	hash: string;
@@ -54,28 +54,29 @@ export async function runSubmitCommitFlow(
 		return;
 	}
 
-	const phabRepoPHID = await pickPhabRepository(manager);
+	const metadata = parseCommitMetadata(commit.subject, commit.body);
+
+	const phabRepoPHID = await resolveConfiguredRepository(manager);
 	if (!phabRepoPHID) {
 		return;
 	}
 
 	let targetRevisionPHID: string | undefined;
 	if (mode === 'update') {
-		targetRevisionPHID = await pickRevisionToUpdate(manager);
+		targetRevisionPHID = await pickRevisionToUpdate(manager, metadata.differentialMonogram);
 		if (!targetRevisionPHID) {
 			return;
 		}
 	}
 
-	const reviewerPHIDs = mode === 'create' ? await pickReviewers(manager) : undefined;
+	const reviewerPHIDs = mode === 'create' ? await pickReviewers(manager, metadata.reviewers) : undefined;
 	if (mode === 'create' && !reviewerPHIDs) {
 		return;
 	}
 
 	const subject = commit.subject;
 	const body = commit.body;
-	const bugMatch = BUG_RE.exec(commit.subject) || BUG_RE.exec(body);
-	const bug = bugMatch ? bugMatch[1] : undefined;
+	const bug = metadata.bug;
 
 	const title = mode === 'create' ? await ask('Title', subject) : undefined;
 	if (mode === 'create' && !title) {
@@ -190,53 +191,96 @@ async function getCommitDiff(gitPath: string, cwd: string, commitHash: string): 
 	}
 }
 
-async function pickPhabRepository(manager: RevisionsManager): Promise<string | undefined> {
+const DEFAULT_REPO_FALLBACK = 'https://phabricator.services.mozilla.com/source/firefox-autoland/';
+const repoIdentifierCache = new Map<string, string>();
+
+async function resolveConfiguredRepository(manager: RevisionsManager): Promise<string | undefined> {
 	const session = manager.session!;
-	const repos = [];
-	for await (const repo of session.client.searchRepositories({ vcs: ['git'] })) {
-		repos.push(repo);
-		if (repos.length >= 50) {
-			break;
-		}
-	}
-	if (repos.length === 0) {
-		vscode.window.showErrorMessage('No Phabricator repositories visible to you.');
+	const raw = vscode.workspace
+		.getConfiguration('phabricator')
+		.get<string>('defaultRepository', DEFAULT_REPO_FALLBACK)
+		.trim();
+	if (!raw) {
+		vscode.window.showErrorMessage('Set "phabricator.defaultRepository" in settings to submit revisions.');
 		return undefined;
 	}
-	const pick = await vscode.window.showQuickPick(
-		repos.map((r) => ({
-			label: r.fields.name,
-			description: r.fields.shortName || r.fields.callsign || '',
-			detail: r.phid,
-			phid: r.phid,
-		})),
-		{ placeHolder: 'Select Phabricator repository' },
+	const cached = repoIdentifierCache.get(raw);
+	if (cached) {
+		return cached;
+	}
+	if (raw.startsWith('PHID-REPO-')) {
+		repoIdentifierCache.set(raw, raw);
+		return raw;
+	}
+	const identifier = parseRepoIdentifier(raw);
+	try {
+		const iter = session.client.searchRepositories({
+			shortNames: [identifier],
+			callsigns: [identifier],
+		});
+		for await (const repo of iter) {
+			repoIdentifierCache.set(raw, repo.phid);
+			Logger.info(`Resolved ${raw} -> ${repo.phid}`, COMPONENT);
+			return repo.phid;
+		}
+	} catch (err) {
+		Logger.warn(`Repository lookup failed: ${err instanceof Error ? err.message : err}`, COMPONENT);
+	}
+	vscode.window.showErrorMessage(
+		`Could not resolve Phabricator repository "${raw}". Update "phabricator.defaultRepository".`,
 	);
-	return pick?.phid;
+	return undefined;
 }
 
-async function pickRevisionToUpdate(manager: RevisionsManager): Promise<string | undefined> {
+function parseRepoIdentifier(value: string): string {
+	const urlMatch = /\/source\/([^/]+)/.exec(value);
+	if (urlMatch) {
+		return urlMatch[1];
+	}
+	return value.replace(/^\/+|\/+$/g, '');
+}
+
+async function pickRevisionToUpdate(
+	manager: RevisionsManager,
+	preselectMonogram?: string,
+): Promise<string | undefined> {
 	const mine = await manager.getRevisionsForCategory('mine');
 	if (mine.length === 0) {
 		vscode.window.showErrorMessage('You have no active revisions to update.');
 		return undefined;
 	}
-	const pick = await vscode.window.showQuickPick(
-		mine.map((m) => ({
-			label: `${m.monogram}: ${m.title}`,
-			description: m.statusName,
-			phid: m.phid,
-		})),
-		{ placeHolder: 'Select revision to update' },
-	);
+	type RevPick = vscode.QuickPickItem & { phid: string };
+	const items: RevPick[] = mine.map((m) => ({
+		label: m.monogram === preselectMonogram ? `$(check) ${m.monogram}: ${m.title}` : `${m.monogram}: ${m.title}`,
+		description: m.statusName,
+		phid: m.phid,
+	}));
+	items.sort((a, b) => Number(b.label.startsWith('$(check)')) - Number(a.label.startsWith('$(check)')));
+	const pick = await vscode.window.showQuickPick<RevPick>(items, {
+		placeHolder: preselectMonogram
+			? `Detected ${preselectMonogram} in commit — confirm or pick a different revision`
+			: 'Select revision to update',
+	});
 	return pick?.phid;
 }
 
-async function pickReviewers(manager: RevisionsManager): Promise<string[] | undefined> {
+async function pickReviewers(
+	manager: RevisionsManager,
+	detected: ParsedReviewers,
+): Promise<string[] | undefined> {
 	const session = manager.session!;
+	const detectedTokens = [
+		...detected.usernames,
+		...detected.projectSlugs.map((s) => `#${s}`),
+	];
+	const defaultValue = detectedTokens.join(', ');
 	const input = await vscode.window.showInputBox({
-		prompt: 'Reviewers (comma-separated usernames or #project slugs). Leave empty for none.',
+		prompt: detectedTokens.length > 0
+			? 'Detected reviewers from commit message — edit if needed.'
+			: 'Reviewers (comma-separated usernames or #project slugs). Leave empty for none.',
 		placeHolder: 'alice, bob, #firefox-build-system',
+		value: defaultValue,
+		ignoreFocusOut: true,
 	});
 	if (input === undefined) {
 		return undefined;

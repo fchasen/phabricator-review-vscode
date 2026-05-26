@@ -496,7 +496,7 @@ class PhabricatorClient {
 			transactions.push({ type: 'testPlan', value: fields.testPlan });
 		}
 		if (fields.reviewerPHIDs && fields.reviewerPHIDs.length > 0) {
-			transactions.push({ type: 'reviewers.add', value: fields.reviewerPHIDs });
+			transactions.push({ type: 'reviewers.set', value: fields.reviewerPHIDs });
 		}
 		if (fields.subscriberPHIDs && fields.subscriberPHIDs.length > 0) {
 			transactions.push({ type: 'subscribers.add', value: fields.subscriberPHIDs });

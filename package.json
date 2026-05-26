@@ -147,6 +147,11 @@
 					"type": "string",
 					"default": "firefox-main",
 					"description": "Searchfox repository identifier used when generating links from the composer (e.g. firefox-main, mozilla-central, comm-central)."
+				},
+				"phabricator.defaultRepository": {
+					"type": "string",
+					"default": "https://phabricator.services.mozilla.com/source/firefox-autoland/",
+					"description": "Default Phabricator repository used when submitting revisions. Accepts a /source/<shortName>/ URL, a shortName, a callsign, or a PHID."
 				}
 			}
 		}
