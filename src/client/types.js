@@ -170,6 +170,7 @@
 
 /**
  * @typedef {Object} TransactionComment
+ * @property {number} id
  * @property {string} phid
  * @property {number} version
  * @property {string} authorPHID

@@ -102,6 +102,7 @@ interface InlineAnchor {
 	isOutdated: boolean;
 	isDone: boolean;
 	commentPHID: string | null;
+	commentID: number | null;
 	snippet: SnippetLine[];
 }
 
@@ -303,13 +304,8 @@ function basename(path: string): string {
 	return idx === -1 ? path : path.slice(idx + 1);
 }
 
-function InlineSnippet({ inline, canEdit }: { inline: InlineAnchor; canEdit: boolean }) {
+function InlineSnippet({ inline }: { inline: InlineAnchor }) {
 	const [collapsed, setCollapsed] = useState(false);
-	const [done, setDone] = useState(inline.isDone);
-	const [pending, setPending] = useState(false);
-	useEffect(() => {
-		setDone(inline.isDone);
-	}, [inline.isDone]);
 	const open = () => request('revealInlineComment', inline);
 	const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
 		if (e.key === 'Enter' || e.key === ' ') {
@@ -317,25 +313,12 @@ function InlineSnippet({ inline, canEdit }: { inline: InlineAnchor; canEdit: boo
 			open();
 		}
 	};
-	const toggleDone = async () => {
-		if (!inline.commentPHID || pending) return;
-		const next = !done;
-		setDone(next);
-		setPending(true);
-		try {
-			const ok = await request<boolean>('markInlineDone', {
-				commentPHID: inline.commentPHID,
-				done: next,
-			});
-			if (!ok) setDone(!next);
-		} catch {
-			setDone(!next);
-		} finally {
-			setPending(false);
-		}
-	};
 	const hasSnippet = inline.snippet.length > 0;
 	const hasComment = !!inline.commentPHID;
+	const done = inline.isDone;
+	const openInBrowser = () => {
+		if (inline.commentID) request('openInlineInBrowser', { commentID: inline.commentID });
+	};
 	return (
 		<div className={`inline-snippet${done ? ' inline-snippet-done' : ''}`}>
 			<div className="inline-snippet-head">
@@ -358,18 +341,19 @@ function InlineSnippet({ inline, canEdit }: { inline: InlineAnchor; canEdit: boo
 					{basename(inline.path)}
 				</button>
 				{inline.isOutdated && <span className="inline-snippet-badge">Outdated</span>}
-				{hasComment && canEdit && (
-					<label className="inline-snippet-done-toggle" title={done ? 'Mark as not done' : 'Mark as done'}>
-						<input
-							type="checkbox"
-							checked={done}
-							disabled={pending}
-							onChange={toggleDone}
-						/>
+				{hasComment && inline.commentID && (
+					<button
+						type="button"
+						className={`inline-snippet-done-toggle${done ? ' is-done' : ''}`}
+						onClick={openInBrowser}
+						title={done ? 'Marked done — open in Phabricator' : 'Open in Phabricator to mark done'}
+					>
+						<i className={`codicon codicon-${done ? 'check' : 'circle-large-outline'}`} />
 						<span>Done</span>
-					</label>
+						<i className="codicon codicon-link-external" />
+					</button>
 				)}
-				{hasComment && !canEdit && (
+				{hasComment && !inline.commentID && (
 					<span
 						className={`inline-snippet-done-icon${done ? ' is-done' : ''}`}
 						title={done ? 'Marked done' : 'Not done'}
@@ -1191,7 +1175,7 @@ export function App() {
 													</button>
 												)}
 											</header>
-											{inline && <InlineSnippet inline={inline} canEdit={payload.isAuthor} />}
+											{inline && <InlineSnippet inline={inline} />}
 											{tx.comments.map((c) => (
 												<Remarkup key={c.phid} html={c.contentHtml} source={c.content} />
 											))}

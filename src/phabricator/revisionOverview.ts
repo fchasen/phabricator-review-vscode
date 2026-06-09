@@ -103,6 +103,7 @@ interface InlineLink {
 	isOutdated: boolean;
 	isDone: boolean;
 	commentPHID: string | null;
+	commentID: number | null;
 	snippet: SnippetLine[];
 }
 
@@ -180,6 +181,15 @@ export class RevisionOverviewPanel extends WebviewBase {
 			case 'openInBrowser':
 				vscode.env.openExternal(vscode.Uri.parse(this._model.uri));
 				return this._replyMessage(message, true);
+			case 'openInlineInBrowser': {
+				const args = message.args as { commentID?: number } | undefined;
+				if (!args?.commentID) {
+					return this._replyMessage(message, false);
+				}
+				const base = this._model.uri.replace(/\/+$/, '');
+				vscode.env.openExternal(vscode.Uri.parse(`${base}#inline-${args.commentID}`));
+				return this._replyMessage(message, true);
+			}
 			case 'openLando': {
 				const base = vscode.workspace.getConfiguration('phabricator').get<string>('landoBaseUrl', 'https://lando.moz.tools/');
 				const trimmed = base.endsWith('/') ? base : `${base}/`;
@@ -233,18 +243,6 @@ export class RevisionOverviewPanel extends WebviewBase {
 					// Publish drafts (including the one we just created) via an empty
 					// comment transaction. Phab interprets this as "publish my drafts".
 					await this._model.comment('');
-					return this._replyMessage(message, true);
-				} catch (err) {
-					return this._throwError(message, err instanceof Error ? err.message : String(err));
-				}
-			}
-			case 'markInlineDone': {
-				const args = message.args as { commentPHID?: string; done?: boolean } | undefined;
-				if (!args?.commentPHID) {
-					return this._replyMessage(message, false);
-				}
-				try {
-					await this._model.markInlineDone([args.commentPHID], args.done !== false);
 					return this._replyMessage(message, true);
 				} catch (err) {
 					return this._throwError(message, err instanceof Error ? err.message : String(err));
@@ -776,6 +774,7 @@ function extractInlineLink(
 		isOutdated,
 		isDone,
 		commentPHID: headComment ? headComment.phid : null,
+		commentID: headComment ? headComment.id : null,
 		snippet,
 	};
 }
