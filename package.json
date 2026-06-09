@@ -88,12 +88,22 @@
 			},
 			{
 				"command": "phabricator.submitCommit",
-				"title": "Submit Current Commit",
+				"title": "Submit Current Commit via moz-phab",
 				"category": "Phabricator"
 			},
 			{
 				"command": "phabricator.updateRevisionFromCommit",
-				"title": "Update Revision from Commit",
+				"title": "Update Revision from Commit via moz-phab",
+				"category": "Phabricator"
+			},
+			{
+				"command": "phabricator.openUnsubmittedCommit",
+				"title": "Open Unsubmitted Commit",
+				"category": "Phabricator"
+			},
+			{
+				"command": "phabricator.submitUnsubmittedCommit",
+				"title": "Submit with moz-phab",
 				"category": "Phabricator"
 			},
 			{
@@ -117,9 +127,23 @@
 					"when": "commentController == mozilla.phabricator"
 				}
 			],
+			"view/item/context": [
+				{
+					"command": "phabricator.submitUnsubmittedCommit",
+					"when": "view == phabricator:revisions && viewItem == unsubmitted-commit"
+				}
+			],
 			"commandPalette": [
 				{
 					"command": "phabricator.submitInlineComment",
+					"when": "false"
+				},
+				{
+					"command": "phabricator.openUnsubmittedCommit",
+					"when": "false"
+				},
+				{
+					"command": "phabricator.submitUnsubmittedCommit",
 					"when": "false"
 				}
 			]
@@ -152,6 +176,11 @@
 					"type": "string",
 					"default": "https://phabricator.services.mozilla.com/source/firefox-autoland/",
 					"description": "Default Phabricator repository used when submitting revisions. Accepts a /source/<shortName>/ URL, a shortName, a callsign, or a PHID."
+				},
+				"phabricator.mozPhabPath": {
+					"type": "string",
+					"default": "moz-phab",
+					"description": "Path to the `moz-phab` executable used to submit commits."
 				}
 			}
 		}

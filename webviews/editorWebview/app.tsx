@@ -133,6 +133,7 @@ interface StackInfo {
 }
 
 interface OverviewPayload {
+	mode?: 'revision' | 'unsubmitted';
 	id: number;
 	monogram: string;
 	uri: string;
@@ -1068,10 +1069,16 @@ export function App() {
 		}
 	};
 
+	const submitUnsubmitted = () => {
+		setBusy(true);
+		void request<boolean>('submitUnsubmitted').finally(() => setBusy(false));
+	};
+
 	const editProjects = () => {
 		request('editProjects');
 	};
 
+	const isUnsubmitted = payload.mode === 'unsubmitted';
 	return (
 		<div className="overview">
 			<div className="grid">
@@ -1080,11 +1087,16 @@ export function App() {
 						<EditableTitle title={payload.title} canEdit={payload.isAuthor} />
 						<div className="status">
 							<span className={`badge status-${payload.statusValue}`}>{payload.statusName}</span>
-							<span className="monogram">
-								<a href={payload.uri} target="_blank" rel="noreferrer">
-									{payload.monogram}
-								</a>
-							</span>
+							{!isUnsubmitted && (
+								<span className="monogram">
+									<a href={payload.uri} target="_blank" rel="noreferrer">
+										{payload.monogram}
+									</a>
+								</span>
+							)}
+							{isUnsubmitted && payload.monogram && (
+								<span className="monogram" title="Branch / commit">{payload.monogram}</span>
+							)}
 							<span className="author">by {payload.authorName}</span>
 							{payload.bug && (
 								<span className="bug">
@@ -1110,17 +1122,19 @@ export function App() {
 						emptyMessage="No summary yet."
 						editTitle="Edit summary"
 					/>
-					<EditableMarkupSection
-						field="testPlan"
-						title="Test plan"
-						sectionClass="test-plan"
-						value={payload.testPlan}
-						html={payload.testPlanHtml}
-						canEdit={payload.isAuthor}
-						emptyButtonLabel="Add test plan"
-						emptyMessage="No test plan yet."
-						editTitle="Edit test plan"
-					/>
+					{!isUnsubmitted && (
+						<EditableMarkupSection
+							field="testPlan"
+							title="Test plan"
+							sectionClass="test-plan"
+							value={payload.testPlan}
+							html={payload.testPlanHtml}
+							canEdit={payload.isAuthor}
+							emptyButtonLabel="Add test plan"
+							emptyMessage="No test plan yet."
+							editTitle="Edit test plan"
+						/>
+					)}
 
 					<section className="timeline">
 						<div className="section-head">
@@ -1199,20 +1213,26 @@ export function App() {
 
 					<section className="composer">
 						<h2>Comment</h2>
-						<Suspense fallback={<div className="composer-loading">Loading editor…</div>}>
-							<RemarkupComposer key={composerKey} onChange={setComment} disabled={busy} />
-						</Suspense>
-						<div className="composer-actions">
-							<button
-								className="action action-secondary"
-								disabled={busy || comment.trim().length === 0}
-								onClick={() => submit('comment')}
-								title="Post a comment without changing review state"
-							>
-								<i className="codicon codicon-comment" />
-								<span>Comment</span>
-							</button>
-						</div>
+						{isUnsubmitted ? (
+							<p className="muted">Comments will be available after the commit is submitted to Phabricator.</p>
+						) : (
+							<>
+								<Suspense fallback={<div className="composer-loading">Loading editor…</div>}>
+									<RemarkupComposer key={composerKey} onChange={setComment} disabled={busy} />
+								</Suspense>
+								<div className="composer-actions">
+									<button
+										className="action action-secondary"
+										disabled={busy || comment.trim().length === 0}
+										onClick={() => submit('comment')}
+										title="Post a comment without changing review state"
+									>
+										<i className="codicon codicon-comment" />
+										<span>Comment</span>
+									</button>
+								</div>
+							</>
+						)}
 					</section>
 
 					<section className="files-main">
@@ -1240,7 +1260,10 @@ export function App() {
 						<button
 							className="open-in-browser"
 							onClick={() => request('openInBrowser')}
-							title={`Open ${payload.monogram} on Phabricator`}
+							disabled={isUnsubmitted}
+							title={isUnsubmitted
+								? 'Submit to Phabricator first to enable this link'
+								: `Open ${payload.monogram} on Phabricator`}
 						>
 							<i className="codicon codicon-link-external" />
 							<span>Open in Phabricator</span>
@@ -1248,7 +1271,10 @@ export function App() {
 						<button
 							className="open-in-browser"
 							onClick={() => request('openLando')}
-							title={`Open ${payload.monogram} in Lando`}
+							disabled={isUnsubmitted}
+							title={isUnsubmitted
+								? 'Submit to Phabricator first to enable this link'
+								: `Open ${payload.monogram} in Lando`}
 						>
 							<span className="codicon-link">↗</span>
 							<span>View in Lando</span>
@@ -1256,79 +1282,93 @@ export function App() {
 					</div>
 
 					<section className="actions">
-						<h3>Review</h3>
-						{!payload.isAuthor && (
+						<h3>{isUnsubmitted ? 'Submit' : 'Review'}</h3>
+						{isUnsubmitted ? (
+							<button
+								className="action action-primary action-accept"
+								disabled={busy}
+								onClick={() => submitUnsubmitted()}
+								title="Run `moz-phab submit` in an integrated terminal for this repo"
+							>
+								<span className="action-icon"><i className="codicon codicon-rocket" /></span>
+								<span>Submit with moz-phab</span>
+							</button>
+						) : (
 							<>
-								<button
-									className="action action-primary action-accept"
-									disabled={busy}
-									onClick={() => submit('accept')}
-									title="Accept this revision (publishes any draft inline comments)"
-								>
-									<span className="action-icon"><i className="codicon codicon-check" /></span>
-									<span>Accept</span>
-								</button>
-								<button
-									className="action action-warn"
-									disabled={busy}
-									onClick={() => submit('requestChanges')}
-									title="Block on changes"
-								>
-									<span className="action-icon"><i className="codicon codicon-warning" /></span>
-									<span>Request changes</span>
-								</button>
-								{payload.isReviewer && (
-									<TestingTagPicker
-										currentSlug={payload.testingTagSlug}
-										busy={busy}
-										onSelect={(slug) => {
-											setBusy(true);
-											void request<boolean>('setTestingTag', { slug }).finally(() => setBusy(false));
-										}}
-										onClear={() => {
-											setBusy(true);
-											void request<boolean>('clearTestingTag').finally(() => setBusy(false));
-										}}
-									/>
+								{!payload.isAuthor && (
+									<>
+										<button
+											className="action action-primary action-accept"
+											disabled={busy}
+											onClick={() => submit('accept')}
+											title="Accept this revision (publishes any draft inline comments)"
+										>
+											<span className="action-icon"><i className="codicon codicon-check" /></span>
+											<span>Accept</span>
+										</button>
+										<button
+											className="action action-warn"
+											disabled={busy}
+											onClick={() => submit('requestChanges')}
+											title="Block on changes"
+										>
+											<span className="action-icon"><i className="codicon codicon-warning" /></span>
+											<span>Request changes</span>
+										</button>
+										{payload.isReviewer && (
+											<TestingTagPicker
+												currentSlug={payload.testingTagSlug}
+												busy={busy}
+												onSelect={(slug) => {
+													setBusy(true);
+													void request<boolean>('setTestingTag', { slug }).finally(() => setBusy(false));
+												}}
+												onClear={() => {
+													setBusy(true);
+													void request<boolean>('clearTestingTag').finally(() => setBusy(false));
+												}}
+											/>
+										)}
+									</>
 								)}
+
+								<div className="actions-destructive">
+									{payload.isAuthor && (
+										<button
+											className="action action-destructive"
+											disabled={busy}
+											onClick={() => submitDestructive('abandon')}
+											title="Mark this revision as abandoned (you can reclaim later)"
+										>
+											<span className="action-icon"><i className="codicon codicon-close" /></span>
+											<span>Abandon…</span>
+										</button>
+									)}
+									{!payload.isAuthor && (
+										<button
+											className="action action-destructive"
+											disabled={busy}
+											onClick={() => submitDestructive('commandeer')}
+											title="Take ownership of this revision from its current author"
+										>
+											<span className="action-icon"><i className="codicon codicon-arrow-swap" /></span>
+											<span>Commandeer…</span>
+										</button>
+									)}
+									{!payload.isAuthor && payload.isReviewer && (
+										<button
+											className="action action-destructive"
+											disabled={busy}
+											onClick={() => submitDestructive('resign')}
+											title="Remove yourself as a reviewer on this revision"
+										>
+											<span className="action-icon"><i className="codicon codicon-discard" /></span>
+											<span>Resign…</span>
+										</button>
+									)}
+								</div>
 							</>
 						)}
-
-						<div className="actions-destructive">
-							{payload.isAuthor && (
-								<button
-									className="action action-destructive"
-									disabled={busy}
-									onClick={() => submitDestructive('abandon')}
-									title="Mark this revision as abandoned (you can reclaim later)"
-								>
-									<span className="action-icon"><i className="codicon codicon-close" /></span>
-									<span>Abandon…</span>
-								</button>
-							)}
-							{!payload.isAuthor && (
-								<button
-									className="action action-destructive"
-									disabled={busy}
-									onClick={() => submitDestructive('commandeer')}
-									title="Take ownership of this revision from its current author"
-								>
-									<span className="action-icon"><i className="codicon codicon-arrow-swap" /></span>
-									<span>Commandeer…</span>
-								</button>
-							)}
-							{!payload.isAuthor && payload.isReviewer && (
-								<button
-									className="action action-destructive"
-									disabled={busy}
-									onClick={() => submitDestructive('resign')}
-									title="Remove yourself as a reviewer on this revision"
-								>
-									<span className="action-icon"><i className="codicon codicon-discard" /></span>
-									<span>Resign…</span>
-								</button>
-							)}
-						</div>
 					</section>
 
 					<section className="reviewers">
@@ -1361,7 +1401,12 @@ export function App() {
 							<section className="projects">
 								<div className="section-head">
 									<h3>Projects ({visibleProjects.length})</h3>
-									<button className="link-button" onClick={editProjects} title="Add a project tag">
+									<button
+										className="link-button"
+										onClick={editProjects}
+										disabled={isUnsubmitted}
+										title={isUnsubmitted ? 'Submit to Phabricator first to add tags' : 'Add a project tag'}
+									>
 										Add
 									</button>
 								</div>

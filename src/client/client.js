@@ -255,30 +255,6 @@ class PhabricatorClient {
 		}
 	}
 
-	/**
-	 * Upload a unified-diff string and return the new diff identifiers.
-	 *
-	 * Mozilla's instance accepts the legacy `differential.creatediff` shape;
-	 * the modern `differential.diff.create` is not yet enabled. Verify before
-	 * relying on this in production code.
-	 *
-	 * @param {{ diff: string, repositoryPHID: string, sourceControlBaseRevision?: string, sourceControlSystem?: string }} args
-	 * @returns {Promise<{ phid: string, id: number, uri: string|null }>}
-	 */
-	async createRawDiff(args) {
-		const result = await this.call('differential.createrawdiff', {
-			diff: args.diff,
-			repositoryPHID: args.repositoryPHID,
-			baseRevision: args.sourceControlBaseRevision,
-		});
-		const r = /** @type {any} */ (result);
-		return {
-			phid: r.phid,
-			id: r.id,
-			uri: r.uri || null,
-		};
-	}
-
 	// ----------------------------------------------------------- transactions
 
 	/**
@@ -440,76 +416,6 @@ class PhabricatorClient {
 	 */
 	async deleteInline(phid) {
 		await this.call('differential.deleteinline', { phid });
-	}
-
-	// -------------------------------------------------------------- create / update
-
-	/**
-	 * Create a brand-new revision around an already-uploaded diff.
-	 *
-	 * @param {{
-	 *   diffPHID: string,
-	 *   title: string,
-	 *   summary?: string,
-	 *   testPlan?: string,
-	 *   reviewerPHIDs?: string[],
-	 *   subscriberPHIDs?: string[],
-	 *   bug?: string|number,
-	 *   projectPHIDs?: string[]
-	 * }} fields
-	 * @returns {Promise<EditResult>}
-	 */
-	createRevision(fields) {
-		const transactions = /** @type {EditTransaction[]} */ ([
-			{ type: 'update', value: fields.diffPHID },
-			{ type: 'title', value: fields.title },
-		]);
-		if (fields.summary !== undefined) {
-			transactions.push({ type: 'summary', value: fields.summary });
-		}
-		if (fields.testPlan !== undefined) {
-			transactions.push({ type: 'testPlan', value: fields.testPlan });
-		}
-		if (fields.reviewerPHIDs && fields.reviewerPHIDs.length > 0) {
-			transactions.push({ type: 'reviewers.set', value: fields.reviewerPHIDs });
-		}
-		if (fields.subscriberPHIDs && fields.subscriberPHIDs.length > 0) {
-			transactions.push({ type: 'subscribers.add', value: fields.subscriberPHIDs });
-		}
-		if (fields.projectPHIDs && fields.projectPHIDs.length > 0) {
-			transactions.push({ type: 'projects.add', value: fields.projectPHIDs });
-		}
-		if (fields.bug !== undefined && fields.bug !== null && fields.bug !== '') {
-			transactions.push({ type: 'bugzilla.bug-id', value: String(fields.bug) });
-		}
-		return this.editRevision({ transactions });
-	}
-
-	/**
-	 * Update an existing revision with a new diff and/or metadata.
-	 *
-	 * @param {string|number} revIdOrPHID
-	 * @param {{ diffPHID?: string, title?: string, summary?: string, message?: string, bug?: string|number }} fields
-	 * @returns {Promise<EditResult>}
-	 */
-	updateRevision(revIdOrPHID, fields) {
-		const transactions = /** @type {EditTransaction[]} */ ([]);
-		if (fields.diffPHID !== undefined) {
-			transactions.push({ type: 'update', value: fields.diffPHID });
-		}
-		if (fields.title !== undefined) {
-			transactions.push({ type: 'title', value: fields.title });
-		}
-		if (fields.summary !== undefined) {
-			transactions.push({ type: 'summary', value: fields.summary });
-		}
-		if (fields.bug !== undefined && fields.bug !== null && fields.bug !== '') {
-			transactions.push({ type: 'bugzilla.bug-id', value: String(fields.bug) });
-		}
-		if (fields.message !== undefined) {
-			transactions.push({ type: 'comment', value: fields.message });
-		}
-		return this.editRevision({ objectIdentifier: revIdOrPHID, transactions });
 	}
 
 	// ----------------------------------------------------------- resolution helpers

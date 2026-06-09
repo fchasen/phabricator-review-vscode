@@ -8,7 +8,10 @@ import { InMemRevisionFileSystemProvider } from './view/inMemRevisionContentProv
 import { PHAB_SCHEME, toPhabUri } from './common/uri';
 import { RevisionOverviewPanel } from './phabricator/revisionOverview';
 import { RevisionCommentController } from './view/revisionCommentController';
-import { runSubmitCommitFlow } from './view/createRevisionFlow';
+import { WorktreeRevisionMap } from './phabricator/worktreeRevisionMap';
+import { runMozPhabSubmit } from './phabricator/mozPhabSubmit';
+import { PreSubmitOverviewPanel } from './view/preSubmitOverviewPanel';
+import { GitExtension, GitAPI } from './api/git';
 import type { Project } from './client';
 
 const SESSION_CONTEXT_KEY = 'phabricator.session';
@@ -26,7 +29,10 @@ export async function activate(context: vscode.ExtensionContext) {
 	const revisionsManager = new RevisionsManager(credentials);
 	context.subscriptions.push(revisionsManager);
 
-	const treeProvider = new RevisionsTreeDataProvider(revisionsManager);
+	const worktreeMap = new WorktreeRevisionMap();
+	context.subscriptions.push(worktreeMap);
+
+	const treeProvider = new RevisionsTreeDataProvider(revisionsManager, worktreeMap);
 	context.subscriptions.push(treeProvider);
 	const treeView = vscode.window.createTreeView('phabricator:revisions', { treeDataProvider: treeProvider });
 	context.subscriptions.push(treeView);
@@ -78,11 +84,37 @@ export async function activate(context: vscode.ExtensionContext) {
 				vscode.window.showErrorMessage(`Failed to submit comment: ${err instanceof Error ? err.message : err}`);
 			}
 		}),
-		vscode.commands.registerCommand('phabricator.submitCommit', () =>
-			runSubmitCommitFlow(revisionsManager, context.extensionUri, 'create'),
+		vscode.commands.registerCommand('phabricator.submitCommit', async () => {
+			const repoRoot = await resolveActiveRepoRoot();
+			if (!repoRoot) {
+				vscode.window.showErrorMessage('No git repository found for the active editor.');
+				return;
+			}
+			runMozPhabSubmit(repoRoot);
+		}),
+		vscode.commands.registerCommand('phabricator.updateRevisionFromCommit', async () => {
+			const repoRoot = await resolveActiveRepoRoot();
+			if (!repoRoot) {
+				vscode.window.showErrorMessage('No git repository found for the active editor.');
+				return;
+			}
+			runMozPhabSubmit(repoRoot);
+		}),
+		vscode.commands.registerCommand(
+			'phabricator.openUnsubmittedCommit',
+			(args: { repoRoot: string; headSha: string }) =>
+				PreSubmitOverviewPanel.show(context.extensionUri, revisionsManager, worktreeMap, args),
 		),
-		vscode.commands.registerCommand('phabricator.updateRevisionFromCommit', () =>
-			runSubmitCommitFlow(revisionsManager, context.extensionUri, 'update'),
+		vscode.commands.registerCommand(
+			'phabricator.submitUnsubmittedCommit',
+			(arg: { repoRoot?: string; headSha?: string } | { mapping?: { rootUri?: vscode.Uri } } | undefined) => {
+				const repoRoot = extractRepoRoot(arg);
+				if (!repoRoot) {
+					vscode.window.showErrorMessage('Could not determine the repository for this commit.');
+					return;
+				}
+				runMozPhabSubmit(repoRoot);
+			},
 		),
 		vscode.commands.registerCommand(
 			'phabricator.revealInlineComment',
@@ -242,6 +274,45 @@ async function revealInlineComment(args: RevealInlineArgs): Promise<void> {
 		editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
 		editor.selection = new vscode.Selection(range.start, range.end);
 	}
+}
+
+async function getGitApi(): Promise<GitAPI | undefined> {
+	const extension = vscode.extensions.getExtension<GitExtension>('vscode.git');
+	if (!extension) return undefined;
+	const ext = extension.isActive ? extension.exports : await extension.activate();
+	return ext.getAPI(1);
+}
+
+async function resolveActiveRepoRoot(): Promise<vscode.Uri | undefined> {
+	const api = await getGitApi();
+	if (!api || api.repositories.length === 0) return undefined;
+	const activeUri = vscode.window.activeTextEditor?.document.uri;
+	if (activeUri) {
+		const repo = api.getRepository(activeUri);
+		if (repo) return repo.rootUri;
+	}
+	if (api.repositories.length === 1) {
+		return api.repositories[0].rootUri;
+	}
+	const folder = vscode.workspace.workspaceFolders?.[0];
+	if (folder) {
+		const repo = api.getRepository(folder.uri);
+		if (repo) return repo.rootUri;
+	}
+	return api.repositories[0].rootUri;
+}
+
+function extractRepoRoot(
+	arg: { repoRoot?: string; headSha?: string } | { mapping?: { rootUri?: vscode.Uri } } | undefined,
+): vscode.Uri | undefined {
+	if (!arg) return undefined;
+	if ('repoRoot' in arg && typeof arg.repoRoot === 'string') {
+		return vscode.Uri.parse(arg.repoRoot);
+	}
+	if ('mapping' in arg && arg.mapping?.rootUri) {
+		return arg.mapping.rootUri;
+	}
+	return undefined;
 }
 
 export function deactivate(): void {

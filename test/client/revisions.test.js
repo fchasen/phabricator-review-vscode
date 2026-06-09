@@ -145,39 +145,3 @@ test('createInline lineLength is length-1 for multi-line ranges', async () => {
 	assert.equal(decoded.params.lineLength, 3);
 });
 
-test('createRevision builds the expected transaction sequence', async () => {
-	const { fetchImpl, calls } = mockFetch([
-		{ body: { result: { object: 'PHID-DREV-NEW', transactions: [] }, error_code: null, error_info: null } },
-	]);
-	const client = new PhabricatorClient({ token: 't', fetch: fetchImpl });
-
-	await client.createRevision({
-		diffPHID: 'PHID-DIFF-1',
-		title: 'Add widget',
-		summary: 'Adds widget.',
-		testPlan: 'mach test',
-		reviewerPHIDs: ['PHID-USER-r1'],
-		bug: 1234567,
-	});
-
-	const decoded = decodeBody(calls[0].body);
-	const types = decoded.params.transactions.map((t) => t.type);
-	assert.deepEqual(types, ['update', 'title', 'summary', 'testPlan', 'reviewers.add', 'bugzilla.bug-id']);
-	assert.equal(decoded.params.objectIdentifier, undefined);
-	const bug = decoded.params.transactions.find((t) => t.type === 'bugzilla.bug-id');
-	assert.equal(bug.value, '1234567');
-});
-
-test('updateRevision passes objectIdentifier and only included fields', async () => {
-	const { fetchImpl, calls } = mockFetch([
-		{ body: { result: { object: 'PHID-DREV-1', transactions: [] }, error_code: null, error_info: null } },
-	]);
-	const client = new PhabricatorClient({ token: 't', fetch: fetchImpl });
-
-	await client.updateRevision(42, { diffPHID: 'PHID-DIFF-2', message: 'rebased' });
-
-	const decoded = decodeBody(calls[0].body);
-	assert.equal(decoded.params.objectIdentifier, 42);
-	const types = decoded.params.transactions.map((t) => t.type);
-	assert.deepEqual(types, ['update', 'comment']);
-});
