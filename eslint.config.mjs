@@ -25,7 +25,7 @@ export default [
 		},
 	},
 	{
-		files: ['src/client/**/*.js'],
+		files: ['src/**/*.js'],
 		languageOptions: {
 			sourceType: 'commonjs',
 			globals: {
