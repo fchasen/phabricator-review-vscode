@@ -34,7 +34,7 @@ body {
 .badge.status-needs-revision { background: color-mix(in srgb, var(--vscode-charts-red) 30%, transparent); color: var(--vscode-charts-red); }
 .badge.status-changes-planned { background: color-mix(in srgb, var(--vscode-charts-yellow) 30%, transparent); color: var(--vscode-charts-yellow); }
 .badge.status-published { background: color-mix(in srgb, var(--vscode-charts-purple) 30%, transparent); color: var(--vscode-charts-purple); }
-.badge.status-abandoned, .badge.status-draft, .badge.status-unsubmitted { background: var(--vscode-badge-background); color: var(--vscode-descriptionForeground); }
+.badge.status-abandoned, .badge.status-draft, .badge.status-unsubmitted { background: color-mix(in srgb, var(--vscode-descriptionForeground) 25%, transparent); color: var(--vscode-foreground); }
 .badge-blocking { background: var(--vscode-errorForeground); color: var(--vscode-editor-background); margin-left: auto; }
 
 .grid {
@@ -685,7 +685,8 @@ body {
 .action-warn { background: color-mix(in srgb, var(--vscode-errorForeground) 18%, transparent); color: var(--vscode-foreground); border-color: color-mix(in srgb, var(--vscode-errorForeground) 35%, transparent); }
 .action-warn .action-icon { background: var(--vscode-errorForeground); color: var(--vscode-editor-background); }
 .action-secondary { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
-.action:hover:not(:disabled) { background: var(--vscode-button-hoverBackground); }
+.action:hover:not(:disabled) { background: var(--vscode-button-secondaryHoverBackground); }
+.action-primary:hover:not(:disabled) { background: var(--vscode-button-hoverBackground); }
 .action-warn:hover:not(:disabled) { background: color-mix(in srgb, var(--vscode-errorForeground) 28%, transparent); }
 .action:disabled { opacity: 0.45; cursor: not-allowed; }
 
