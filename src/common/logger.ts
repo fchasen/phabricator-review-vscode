@@ -8,6 +8,7 @@ import { Disposable } from './lifecycle';
 export const REVISION_TREE = 'RevisionTree';
 export const CONDUIT = 'Conduit';
 export const AUTH = 'Auth';
+export const WORKTREE = 'Worktree';
 
 class Log extends Disposable {
 	private readonly _outputChannel: vscode.LogOutputChannel;
