@@ -142,6 +142,7 @@ interface OverviewPayload {
 	statusValue: string;
 	authorName: string;
 	activeDiffPHID: string | null;
+	worktreeCheckedOut?: boolean;
 	bug: string | null;
 	isAuthor: boolean;
 	isReviewer: boolean;
@@ -985,6 +986,7 @@ export function App() {
 	const [comment, setComment] = useState('');
 	const [composerKey, setComposerKey] = useState(0);
 	const [busy, setBusy] = useState(false);
+	const [checkingOut, setCheckingOut] = useState(false);
 	const [commentsOnly, setCommentsOnly] = useState(true);
 	const [activeReplyTxId, setActiveReplyTxId] = useState<string | null>(null);
 
@@ -1279,6 +1281,26 @@ export function App() {
 							<span className="codicon-link">↗</span>
 							<span>View in Lando</span>
 						</button>
+						{!isUnsubmitted && (
+							<button
+								className="open-in-browser"
+								disabled={checkingOut}
+								onClick={() => {
+									setCheckingOut(true);
+									void request('worktreeCheckout').finally(() => setCheckingOut(false));
+								}}
+								title={payload.worktreeCheckedOut
+									? `Open the ${payload.monogram} sparse worktree in your workspace`
+									: `Create a sparse worktree and apply ${payload.monogram} with moz-phab`}
+							>
+								<i className={`codicon ${checkingOut
+									? 'codicon-loading codicon-modifier-spin'
+									: payload.worktreeCheckedOut ? 'codicon-folder-opened' : 'codicon-repo-clone'}`} />
+								<span>{checkingOut
+									? (payload.worktreeCheckedOut ? 'Opening…' : 'Applying…')
+									: (payload.worktreeCheckedOut ? 'Open Worktree' : 'Apply Patch')}</span>
+							</button>
+						)}
 					</div>
 
 					<section className="actions">

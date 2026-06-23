@@ -1,8 +1,10 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
 import { execFile } from 'child_process';
 import { randomBytes } from 'crypto';
 import type { Changeset, Transaction } from '../client';
 import { WebviewBase, REVISION_OVERVIEW_VIEW_TYPE, IRequestMessage } from '../common/webview';
+import { resolveWorktreeLocation, openExistingWorktree } from './checkoutRevisionWorktree';
 import { RevisionsManager } from './revisionsManager';
 import { RevisionModel } from './revisionModel';
 import { changesetStatus } from '../view/treeNodes/fileChangeNode';
@@ -26,6 +28,11 @@ interface StackInfo {
 	children: StackEntry[];
 }
 
+export interface RevisionOverviewContext {
+	resolveActiveRepoRoot: () => Promise<vscode.Uri | undefined>;
+	onDidChangeWorktrees: vscode.Event<void>;
+}
+
 interface OverviewPayload {
 	id: number;
 	monogram: string;
@@ -38,6 +45,7 @@ interface OverviewPayload {
 	authorName: string;
 	repositoryPHID: string | null;
 	activeDiffPHID: string | null;
+	worktreeCheckedOut: boolean;
 	bug: string | null;
 	isAuthor: boolean;
 	isReviewer: boolean;
@@ -123,7 +131,12 @@ const SNIPPET_CONTEXT_LINES = 3;
 export class RevisionOverviewPanel extends WebviewBase {
 	private static readonly _byPhid = new Map<string, RevisionOverviewPanel>();
 
-	public static async show(extensionUri: vscode.Uri, manager: RevisionsManager, idOrPHID: number | string): Promise<void> {
+	public static async show(
+		extensionUri: vscode.Uri,
+		manager: RevisionsManager,
+		ctx: RevisionOverviewContext,
+		idOrPHID: number | string,
+	): Promise<void> {
 		const model = await manager.getOrFetchRevision(idOrPHID);
 		if (!model) {
 			vscode.window.showErrorMessage(`Could not load revision ${idOrPHID}`);
@@ -134,7 +147,7 @@ export class RevisionOverviewPanel extends WebviewBase {
 			existing._panel.reveal();
 			return;
 		}
-		const panel = new RevisionOverviewPanel(extensionUri, manager, model);
+		const panel = new RevisionOverviewPanel(extensionUri, manager, ctx, model);
 		RevisionOverviewPanel._byPhid.set(model.phid, panel);
 	}
 
@@ -143,6 +156,7 @@ export class RevisionOverviewPanel extends WebviewBase {
 	private constructor(
 		private readonly _extensionUri: vscode.Uri,
 		private readonly _manager: RevisionsManager,
+		private readonly _ctx: RevisionOverviewContext,
 		private readonly _model: RevisionModel,
 	) {
 		super();
@@ -167,6 +181,7 @@ export class RevisionOverviewPanel extends WebviewBase {
 			this._panel.title = `${this._model.monogram}: ${this._model.title}`;
 			this._refresh();
 		}));
+		this._register(this._ctx.onDidChangeWorktrees(() => this._refresh()));
 	}
 
 	protected async _onDidReceiveMessage(message: IRequestMessage<any>): Promise<any> {
@@ -195,6 +210,24 @@ export class RevisionOverviewPanel extends WebviewBase {
 				const trimmed = base.endsWith('/') ? base : `${base}/`;
 				vscode.env.openExternal(vscode.Uri.parse(`${trimmed}${this._model.monogram}/`));
 				return this._replyMessage(message, true);
+			}
+			case 'worktreeCheckout': {
+				let location: { worktreePath: string; monogram: string } | undefined;
+				try {
+					location = await resolveWorktreeLocation(this._ctx, this._model.id);
+				} catch {
+					location = undefined;
+				}
+				try {
+					if (location && fs.existsSync(location.worktreePath)) {
+						await openExistingWorktree(location.worktreePath, location.monogram);
+					} else {
+						await vscode.commands.executeCommand('phabricator.checkoutRevisionWorktree', this._model.id);
+					}
+					return this._replyMessage(message, true);
+				} catch (err) {
+					return this._throwError(message, err instanceof Error ? err.message : String(err));
+				}
 			}
 			case 'comment':
 				try {
@@ -430,8 +463,18 @@ export class RevisionOverviewPanel extends WebviewBase {
 		}
 	}
 
+	private async _worktreeCheckedOut(revisionId: number): Promise<boolean> {
+		try {
+			const location = await resolveWorktreeLocation(this._ctx, revisionId);
+			return fs.existsSync(location.worktreePath);
+		} catch {
+			return false;
+		}
+	}
+
 	private async _buildPayload(): Promise<OverviewPayload> {
 		const revision = this._model.revision;
+		const worktreeCheckedOut = await this._worktreeCheckedOut(revision.id);
 		const transactions = await this._model.getTransactions();
 		const changesets = await this._model.getChangesets().catch(() => []);
 		const stack = await this._fetchStack();
@@ -576,6 +619,7 @@ export class RevisionOverviewPanel extends WebviewBase {
 			authorName: resolveDisplayName(revision.fields.authorPHID, resolver),
 			repositoryPHID: revision.fields.repositoryPHID,
 			activeDiffPHID: activeDiffPHID || null,
+			worktreeCheckedOut,
 			bug: revision.fields.bugzilla?.['bug-id'] || null,
 			isAuthor,
 			isReviewer,

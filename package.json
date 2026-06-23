@@ -110,6 +110,12 @@
 				"command": "phabricator.editProjects",
 				"title": "Edit Project Tags",
 				"category": "Phabricator"
+			},
+			{
+				"command": "phabricator.checkoutRevisionWorktree",
+				"title": "Check Out Revision in Sparse Worktree",
+				"category": "Phabricator",
+				"icon": "$(repo-clone)"
 			}
 		],
 		"menus": {
@@ -131,6 +137,11 @@
 				{
 					"command": "phabricator.submitUnsubmittedCommit",
 					"when": "view == phabricator:revisions && viewItem == unsubmitted-commit"
+				},
+				{
+					"command": "phabricator.checkoutRevisionWorktree",
+					"when": "view == phabricator:revisions && viewItem == revision",
+					"group": "inline@1"
 				}
 			],
 			"commandPalette": [
@@ -181,6 +192,54 @@
 					"type": "string",
 					"default": "moz-phab",
 					"description": "Path to the `moz-phab` executable used to submit commits."
+				},
+				"phabricator.firefoxSourcePath": {
+					"type": "string",
+					"default": "",
+					"description": "Absolute path to your full Firefox checkout used as the source for sparse worktrees. When empty, the active repository, then $FIREFOX_SOURCE, then ~/firefox are tried."
+				},
+				"phabricator.worktreeStorageRoot": {
+					"type": "string",
+					"default": "~/.worktrees",
+					"description": "Root directory under which sparse worktrees are created, laid out as <root>/<repoName>/patch-D<id>. Overridden by $WORKTREE_STORAGE_ROOT."
+				},
+				"phabricator.worktreeSparsePreset": {
+					"type": "string",
+					"enum": [
+						"auto",
+						"base",
+						"frontend",
+						"artifact",
+						"desktop",
+						"full",
+						"none"
+					],
+					"default": "auto",
+					"description": "Sparse-checkout preset for new revision worktrees. 'auto' picks 'frontend' when the source mozconfig enables artifact builds, else 'base'. 'full'/'none' check out the entire tree."
+				},
+				"phabricator.anchorReviewToWorktree": {
+					"type": "boolean",
+					"default": true,
+					"description": "When a revision is checked out in a sparse worktree, anchor its diffs and inline comments to that real worktree (native git: diffs on the actual files) instead of the synthetic phab:// documents. Falls back to phab:// automatically when no worktree is available."
+				},
+				"phabricator.worktreeDiffBase": {
+					"type": "string",
+					"enum": [
+						"parent",
+						"mergeBase"
+					],
+					"default": "parent",
+					"description": "Which git ref the 'before' side of a worktree-anchored diff compares against. 'parent' uses the patched commit's first parent (correct for a single revision); 'mergeBase' diffs against origin/main (useful for stacks)."
+				},
+				"phabricator.worktreeAutoUpdateOnNewDiff": {
+					"type": "string",
+					"enum": [
+						"prompt",
+						"auto",
+						"off"
+					],
+					"default": "prompt",
+					"description": "How to handle a checked-out worktree when a newer diff is uploaded to its revision. 'prompt' asks before force-re-patching (discards uncommitted worktree edits); 'auto' re-patches without asking; 'off' leaves the worktree alone and falls back to the synthetic phab:// diff."
 				}
 			}
 		}

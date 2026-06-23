@@ -183,6 +183,10 @@ export class RevisionsManager extends Disposable {
 		return this._byPHID.get(phid);
 	}
 
+	public getRevisionById(id: number): RevisionModel | undefined {
+		return this._byId.get(id);
+	}
+
 	public async getAttentionCount(): Promise<number> {
 		const session = this._credentials.session;
 		if (!session) return 0;

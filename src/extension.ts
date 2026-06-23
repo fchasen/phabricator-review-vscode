@@ -5,11 +5,14 @@ import Logger from './common/logger';
 import { RevisionsManager } from './phabricator/revisionsManager';
 import { RevisionsTreeDataProvider } from './view/revisionsTreeDataProvider';
 import { InMemRevisionFileSystemProvider } from './view/inMemRevisionContentProvider';
-import { PHAB_SCHEME, toPhabUri } from './common/uri';
+import { PHAB_SCHEME } from './common/uri';
 import { RevisionOverviewPanel } from './phabricator/revisionOverview';
 import { RevisionCommentController } from './view/revisionCommentController';
 import { WorktreeRevisionMap } from './phabricator/worktreeRevisionMap';
+import { WorktreeAnchorResolver, OpenWorktreeOrPhabDiffArgs } from './phabricator/worktreeAnchor';
+import { WorktreeSyncWatcher } from './phabricator/worktreeSyncWatcher';
 import { runMozPhabSubmit } from './phabricator/mozPhabSubmit';
+import { runCheckoutRevisionWorktree, ensureWorktreeInWorkspace } from './phabricator/checkoutRevisionWorktree';
 import { PreSubmitOverviewPanel } from './view/preSubmitOverviewPanel';
 import { GitExtension, GitAPI } from './api/git';
 import type { Project } from './client';
@@ -61,8 +64,15 @@ export async function activate(context: vscode.ExtensionContext) {
 		}),
 	);
 
-	const commentController = new RevisionCommentController(revisionsManager);
+	const gitApi = await getGitApi();
+	const anchorResolver = new WorktreeAnchorResolver(gitApi, worktreeMap, revisionsManager, context.workspaceState);
+	context.subscriptions.push(anchorResolver);
+
+	const commentController = new RevisionCommentController(revisionsManager, anchorResolver);
 	context.subscriptions.push(commentController);
+
+	const worktreeSync = new WorktreeSyncWatcher(revisionsManager, worktreeMap, anchorResolver);
+	context.subscriptions.push(worktreeSync);
 
 	const updateContext = (authed: boolean) => {
 		vscode.commands.executeCommand('setContext', SESSION_CONTEXT_KEY, authed ? 'authenticated' : 'unauthenticated');
@@ -75,7 +85,12 @@ export async function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('phabricator.signOut', () => credentials.signOut()),
 		vscode.commands.registerCommand('phabricator.refresh', () => revisionsManager.refresh()),
 		vscode.commands.registerCommand('phabricator.openRevision', (revisionId: number | string) =>
-			RevisionOverviewPanel.show(context.extensionUri, revisionsManager, revisionId),
+			RevisionOverviewPanel.show(
+				context.extensionUri,
+				revisionsManager,
+				{ resolveActiveRepoRoot, onDidChangeWorktrees: anchorResolver.onDidChangeWorktrees },
+				revisionId,
+			),
 		),
 		vscode.commands.registerCommand('phabricator.submitInlineComment', async (thread: vscode.CommentThread) => {
 			try {
@@ -118,10 +133,31 @@ export async function activate(context: vscode.ExtensionContext) {
 		),
 		vscode.commands.registerCommand(
 			'phabricator.revealInlineComment',
-			(args: RevealInlineArgs) => revealInlineComment(args),
+			(args: RevealInlineArgs) => revealInlineComment(anchorResolver, args),
+		),
+		vscode.commands.registerCommand(
+			'phabricator.openWorktreeOrPhabDiff',
+			(args: OpenWorktreeOrPhabDiffArgs) => openWorktreeOrPhabDiff(anchorResolver, args),
 		),
 		vscode.commands.registerCommand('phabricator.editProjects', (revisionPHID: string) =>
 			editProjectsFlow(revisionsManager, revisionPHID),
+		),
+		vscode.commands.registerCommand(
+			'phabricator.checkoutRevisionWorktree',
+			(arg?: unknown) =>
+				runCheckoutRevisionWorktree(
+					{
+						resolveActiveRepoRoot,
+						pinAppliedDiff: async (revisionId) => {
+							const model = await revisionsManager.getOrFetchRevision(revisionId);
+							if (model) {
+								await model.refresh().catch(() => {});
+								anchorResolver.pin(revisionId, model.revision.fields.diffPHID);
+							}
+						},
+					},
+					normalizeRevisionArg(arg),
+				),
 		),
 	);
 
@@ -243,37 +279,106 @@ async function editProjectsFlow(manager: import('./phabricator/revisionsManager'
 	}
 }
 
-async function revealInlineComment(args: RevealInlineArgs): Promise<void> {
-	const side: 'before' | 'after' = args.isNewFile ? 'after' : 'before';
-	const status = args.status || 'modified';
-	const beforeUri = toPhabUri({
+/**
+ * Open a file's before/after diff, anchored to the checked-out worktree
+ * (native `git:` diff) when one is available and synthetic `phab://` otherwise.
+ * Resolving the "before" ref is async, so both the tree's file nodes and
+ * revealInlineComment route through here. A stale worktree is brought up to
+ * date first (lazy sync trigger).
+ */
+async function openWorktreeOrPhabDiff(
+	resolver: WorktreeAnchorResolver,
+	args: OpenWorktreeOrPhabDiffArgs,
+): Promise<void> {
+	await resolver.ensureFresh(args.revisionId).catch(() => false);
+	await ensureWorktreeFolderForDiff(resolver, args.revisionId);
+	const beforeUri = await resolver.fileUriFor({
 		revisionId: args.revisionId,
 		revisionPHID: args.revisionPHID,
 		diffPHID: args.diffPHID,
-		fileName: args.path,
+		path: args.oldPath || args.currentPath,
 		side: 'before',
-		status,
+		status: args.status,
 	});
-	const afterUri = toPhabUri({
+	const afterUri = await resolver.fileUriFor({
 		revisionId: args.revisionId,
 		revisionPHID: args.revisionPHID,
 		diffPHID: args.diffPHID,
-		fileName: args.path,
+		path: args.currentPath || args.oldPath,
 		side: 'after',
-		status,
+		status: args.status,
 	});
-	const startLine = Math.max(0, args.line - 1);
-	const endLine = Math.max(startLine, startLine + (args.length || 0));
-	const range = new vscode.Range(startLine, 0, endLine, 0);
-	const targetUri = side === 'after' ? afterUri : beforeUri;
-	await vscode.commands.executeCommand('vscode.diff', beforeUri, afterUri, `D${args.revisionId} — ${args.path}`, {
-		selection: range,
-	} satisfies vscode.TextDocumentShowOptions);
-	const editor = vscode.window.visibleTextEditors.find((e) => e.document.uri.toString() === targetUri.toString());
-	if (editor) {
-		editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
-		editor.selection = new vscode.Selection(range.start, range.end);
+
+	let range: vscode.Range | undefined;
+	let showOptions: vscode.TextDocumentShowOptions | undefined;
+	if (args.selection) {
+		const startLine = Math.max(0, args.selection.line - 1);
+		const endLine = Math.max(startLine, startLine + (args.selection.length || 0));
+		range = new vscode.Range(startLine, 0, endLine, 0);
+		showOptions = { selection: range };
 	}
+
+	await vscode.commands.executeCommand('vscode.diff', beforeUri, afterUri, args.title, showOptions);
+
+	if (args.selection && range) {
+		const targetUri = args.selection.isNewFile ? afterUri : beforeUri;
+		const editor = vscode.window.visibleTextEditors.find(
+			(e) => e.document.uri.toString() === targetUri.toString(),
+		);
+		if (editor) {
+			editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
+			editor.selection = new vscode.Selection(range.start, range.end);
+		}
+	}
+}
+
+async function ensureWorktreeFolderForDiff(
+	resolver: WorktreeAnchorResolver,
+	revisionId: number,
+): Promise<void> {
+	const root = resolver.worktreeRootFor(revisionId);
+	if (!root) {
+		return;
+	}
+	const added = ensureWorktreeInWorkspace(root.fsPath, `D${revisionId}`);
+	if (!added) {
+		return;
+	}
+	await waitForWorkspaceFolder(root);
+	vscode.window.showInformationMessage(`Added D${revisionId} worktree to the workspace; its files are now editable.`);
+}
+
+function waitForWorkspaceFolder(uri: vscode.Uri, timeoutMs = 3000): Promise<void> {
+	const present = () => !!vscode.workspace.getWorkspaceFolder(uri);
+	if (present()) {
+		return Promise.resolve();
+	}
+	return new Promise((resolve) => {
+		const sub = vscode.workspace.onDidChangeWorkspaceFolders(() => {
+			if (present()) {
+				clearTimeout(timer);
+				sub.dispose();
+				resolve();
+			}
+		});
+		const timer = setTimeout(() => {
+			sub.dispose();
+			resolve();
+		}, timeoutMs);
+	});
+}
+
+function revealInlineComment(resolver: WorktreeAnchorResolver, args: RevealInlineArgs): Promise<void> {
+	return openWorktreeOrPhabDiff(resolver, {
+		revisionId: args.revisionId,
+		revisionPHID: args.revisionPHID,
+		diffPHID: args.diffPHID,
+		oldPath: args.path,
+		currentPath: args.path,
+		status: args.status || 'modified',
+		title: `D${args.revisionId} — ${args.path}`,
+		selection: { line: args.line, length: args.length, isNewFile: args.isNewFile },
+	});
 }
 
 async function getGitApi(): Promise<GitAPI | undefined> {
@@ -300,6 +405,22 @@ async function resolveActiveRepoRoot(): Promise<vscode.Uri | undefined> {
 		if (repo) return repo.rootUri;
 	}
 	return api.repositories[0].rootUri;
+}
+
+function normalizeRevisionArg(arg: unknown): number | string | undefined {
+	if (arg === undefined || arg === null) {
+		return undefined;
+	}
+	if (typeof arg === 'number' || typeof arg === 'string') {
+		return arg;
+	}
+	if (typeof arg === 'object' && 'model' in arg) {
+		const model = (arg as { model?: { id?: number } }).model;
+		if (model && typeof model.id === 'number') {
+			return model.id;
+		}
+	}
+	return undefined;
 }
 
 function extractRepoRoot(

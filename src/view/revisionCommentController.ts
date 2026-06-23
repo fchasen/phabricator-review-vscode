@@ -1,10 +1,11 @@
 import * as vscode from 'vscode';
 import { Disposable } from '../common/lifecycle';
-import { fromPhabUri, PhabUriParams, PHAB_SCHEME } from '../common/uri';
+import { fromPhabUri } from '../common/uri';
 import { flexibleBool } from '../common/flexibleBool';
 import Logger from '../common/logger';
 import { RevisionsManager } from '../phabricator/revisionsManager';
 import { RevisionModel } from '../phabricator/revisionModel';
+import { WorktreeAnchorResolver } from '../phabricator/worktreeAnchor';
 import type { Transaction } from '../client';
 import { changesetStatus } from './treeNodes/fileChangeNode';
 
@@ -37,11 +38,13 @@ function isInlineByAnchor(t: Transaction): boolean {
 const COMPONENT = 'CommentController';
 
 /**
- * Wires vscode.CommentController against phab:// URIs.
+ * Wires vscode.CommentController against the URIs that back a revision's files.
  *
  * Read path: pulls inline transactions from the active revision and
  * synthesizes a CommentThread per (path, line) group. Replies are folded
- * into their parent thread using replyToCommentPHID.
+ * into their parent thread using replyToCommentPHID. Each thread is anchored
+ * via WorktreeAnchorResolver, which yields a `git:` URI on the checked-out
+ * worktree when one is available and a synthetic `phab://` URI otherwise.
  *
  * Write path: a `phabricator.submitInlineComment` command (registered by
  * the activation entry) reads the user's typed body from the thread,
@@ -53,8 +56,12 @@ export class RevisionCommentController extends Disposable {
 	private readonly _loaded = new Set<string>();
 	private readonly _modelSubscriptions = new Map<string, vscode.Disposable>();
 	private readonly _inFlight = new Map<string, Promise<void>>();
+	private readonly _refreshChains = new Map<string, Promise<void>>();
 
-	constructor(private readonly _manager: RevisionsManager) {
+	constructor(
+		private readonly _manager: RevisionsManager,
+		private readonly _resolver: WorktreeAnchorResolver,
+	) {
 		super();
 		this._controller = this._register(
 			vscode.comments.createCommentController('mozilla.phabricator', 'Mozilla Phabricator'),
@@ -72,7 +79,7 @@ export class RevisionCommentController extends Disposable {
 		this._register(
 			vscode.window.onDidChangeVisibleTextEditors((editors) => {
 				for (const editor of editors) {
-					if (editor.document.uri.scheme === PHAB_SCHEME) {
+					if (this._resolver.revisionKeyForEditor(editor.document.uri) !== undefined) {
 						this._ensureThreadsForUri(editor.document.uri).catch((err) =>
 							Logger.warn(`comment refresh failed: ${err instanceof Error ? err.message : err}`, COMPONENT),
 						);
@@ -87,15 +94,18 @@ export class RevisionCommentController extends Disposable {
 			}),
 		);
 
+		this._register(
+			this._resolver.onDidChangeWorktrees(() => {
+				// A worktree appeared / was removed / re-patched: drop threads
+				// anchored to the old URIs and re-anchor against the new ones.
+				this._disposeAllThreads();
+				this._rescanVisibleEditors();
+			}),
+		);
+
 		this._register({ dispose: () => this._disposeAllThreads() });
 
-		for (const editor of vscode.window.visibleTextEditors) {
-			if (editor.document.uri.scheme === PHAB_SCHEME) {
-				this._ensureThreadsForUri(editor.document.uri).catch((err) =>
-					Logger.warn(err, COMPONENT),
-				);
-			}
-		}
+		this._rescanVisibleEditors();
 	}
 
 	/**
@@ -104,10 +114,28 @@ export class RevisionCommentController extends Disposable {
 	 * `phabricator.submitInlineComment` command.
 	 */
 	public async submit(thread: vscode.CommentThread): Promise<void> {
+		let revisionRef: number | string;
+		let diffPHID: string;
+		let filePath: string;
+		let side: 'before' | 'after';
+
 		const params = fromPhabUri(thread.uri);
-		if (!params) {
-			throw new Error('Comment thread is not on a phab:// URI');
+		if (params) {
+			revisionRef = params.revisionPHID;
+			diffPHID = params.diffPHID;
+			filePath = params.fileName;
+			side = params.side;
+		} else {
+			const anchor = this._resolver.anchorFor(thread.uri);
+			if (!anchor) {
+				throw new Error('Comment thread is not anchored to a known revision file');
+			}
+			revisionRef = anchor.revisionPHID;
+			diffPHID = anchor.diffPHID;
+			filePath = anchor.path;
+			side = anchor.side;
 		}
+
 		const draft = thread.comments[thread.comments.length - 1];
 		if (!draft) {
 			throw new Error('No comment text to submit');
@@ -118,9 +146,9 @@ export class RevisionCommentController extends Disposable {
 		}
 
 		const replyToPHID = findReplyTarget(thread);
-		const model = await this._manager.getOrFetchRevision(params.revisionPHID);
+		const model = await this._manager.getOrFetchRevision(revisionRef);
 		if (!model) {
-			throw new Error(`Revision ${params.revisionId} not found`);
+			throw new Error(`Revision ${revisionRef} not found`);
 		}
 		if (!this._manager.session) {
 			throw new Error('Not signed in');
@@ -129,9 +157,9 @@ export class RevisionCommentController extends Disposable {
 		const range = thread.range || new vscode.Range(0, 0, 0, 0);
 		const numLines = Math.max(1, range.end.line - range.start.line + 1);
 		await model.postInlineComment({
-			diffPHID: params.diffPHID,
-			path: params.fileName,
-			isNewFile: params.side === 'after',
+			diffPHID,
+			path: filePath,
+			isNewFile: side === 'after',
 			line: range.start.line + 1,
 			length: numLines,
 			content: body,
@@ -145,37 +173,51 @@ export class RevisionCommentController extends Disposable {
 	}
 
 	private _provideCommentingRanges(document: vscode.TextDocument): vscode.Range[] | undefined {
-		if (document.uri.scheme !== PHAB_SCHEME) {
+		if (this._resolver.revisionKeyForEditor(document.uri) === undefined) {
 			return undefined;
 		}
 		return [new vscode.Range(0, 0, document.lineCount, 0)];
 	}
 
+	private _rescanVisibleEditors(): void {
+		for (const editor of vscode.window.visibleTextEditors) {
+			if (this._resolver.revisionKeyForEditor(editor.document.uri) !== undefined) {
+				this._ensureThreadsForUri(editor.document.uri).catch((err) =>
+					Logger.warn(`comment refresh failed: ${err instanceof Error ? err.message : err}`, COMPONENT),
+				);
+			}
+		}
+	}
+
 	private async _ensureThreadsForUri(uri: vscode.Uri): Promise<void> {
-		const params = fromPhabUri(uri);
-		if (!params) {
+		const key = this._resolver.revisionKeyForEditor(uri);
+		if (key === undefined) {
 			return;
 		}
-		const phid = params.revisionPHID;
-		if (this._loaded.has(phid)) {
+		const keyStr = String(key);
+		if (this._loaded.has(keyStr)) {
 			return;
 		}
-		const inFlight = this._inFlight.get(phid);
+		const inFlight = this._inFlight.get(keyStr);
 		if (inFlight) {
 			return inFlight;
 		}
 		const work = (async () => {
-			const model = await this._manager.getOrFetchRevision(phid);
+			const model = await this._manager.getOrFetchRevision(key);
 			if (!model) {
 				return;
 			}
 			this._subscribeToModel(model);
 			await this._refreshThreadsFor(model);
-			this._loaded.add(phid);
+			// Mark every key that can reach this model so a later git:/phab://
+			// editor for the same revision short-circuits.
+			this._loaded.add(keyStr);
+			this._loaded.add(model.phid);
+			this._loaded.add(String(model.id));
 		})().finally(() => {
-			this._inFlight.delete(phid);
+			this._inFlight.delete(keyStr);
 		});
-		this._inFlight.set(phid, work);
+		this._inFlight.set(keyStr, work);
 		return work;
 	}
 
@@ -191,7 +233,23 @@ export class RevisionCommentController extends Disposable {
 		this._modelSubscriptions.set(model.phid, sub);
 	}
 
-	private async _refreshThreadsFor(model: RevisionModel): Promise<void> {
+	private _refreshThreadsFor(model: RevisionModel): Promise<void> {
+		// Serialize per model so a worktree-change rescan, a duplicate
+		// _ensureThreadsForUri (its dedup guards are cleared on dispose), or a
+		// model.onDidChange can't interleave with an in-flight refresh and orphan
+		// untracked duplicate threads.
+		const prev = this._refreshChains.get(model.phid) ?? Promise.resolve();
+		const next = prev.catch(() => undefined).then(() => this._doRefreshThreadsFor(model));
+		this._refreshChains.set(model.phid, next);
+		void next.finally(() => {
+			if (this._refreshChains.get(model.phid) === next) {
+				this._refreshChains.delete(model.phid);
+			}
+		});
+		return next;
+	}
+
+	private async _doRefreshThreadsFor(model: RevisionModel): Promise<void> {
 		const transactions = await model.getTransactions();
 		const inlines = transactions.filter(isInlineByAnchor);
 		Logger.info(
@@ -264,7 +322,14 @@ export class RevisionCommentController extends Disposable {
 			}
 			const side: 'before' | 'after' = flexibleBool(fields.isNewFile, true) ? 'after' : 'before';
 			const status = fileStatusByPath.get(fields.path) || 'modified';
-			const uri = phabFileUri(model, diffPHID, fields.path, side, status);
+			const uri = await this._resolver.fileUriFor({
+				revisionId: model.id,
+				revisionPHID: model.phid,
+				diffPHID,
+				path: fields.path,
+				side,
+				status,
+			});
 			const startLine = Math.max(0, fields.line - 1);
 			const endLine = Math.max(startLine, startLine + (fields.length || 0));
 			const range = new vscode.Range(startLine, 0, endLine, 0);
@@ -315,25 +380,6 @@ export class RevisionCommentController extends Disposable {
 		this._loaded.clear();
 		this._inFlight.clear();
 	}
-}
-
-function phabFileUri(
-	model: RevisionModel,
-	diffPHID: string,
-	path: string,
-	side: 'before' | 'after',
-	status: 'added' | 'removed' | 'modified' | 'renamed' | 'copied',
-): vscode.Uri {
-	const params: PhabUriParams = {
-		revisionId: model.id,
-		revisionPHID: model.phid,
-		diffPHID,
-		fileName: path,
-		side,
-		status,
-	};
-	const query = encodeURIComponent(JSON.stringify(params));
-	return vscode.Uri.parse(`${PHAB_SCHEME}://D${model.id}/${side}/${path}?${query}`);
 }
 
 function findReplyTarget(thread: vscode.CommentThread): string | undefined {

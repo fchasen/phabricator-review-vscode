@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import type { Changeset } from '../../client';
 import { RevisionModel } from '../../phabricator/revisionModel';
-import { toPhabUri, PhabUriParams } from '../../common/uri';
+import { PhabUriParams } from '../../common/uri';
+import { OpenWorktreeOrPhabDiffArgs } from '../../phabricator/worktreeAnchor';
 
 const TYPE_LABEL: Record<number, string> = {
 	1: 'A', // add
@@ -51,26 +52,18 @@ export class FileChangeNode extends vscode.TreeItem {
 		this.iconPath = TYPE_ICON[changeset.type] || new vscode.ThemeIcon('file');
 		const status = changesetStatus(changeset.type);
 		this.command = {
-			command: 'vscode.diff',
+			command: 'phabricator.openWorktreeOrPhabDiff',
 			title: 'Open Diff',
 			arguments: [
-				toPhabUri({
+				{
 					revisionId: model.id,
 					revisionPHID: model.phid,
 					diffPHID: model.revision.fields.diffPHID,
-					fileName: changeset.oldPath || changeset.currentPath || '',
-					side: 'before',
+					oldPath: changeset.oldPath || changeset.currentPath || '',
+					currentPath: changeset.currentPath || changeset.oldPath || '',
 					status,
-				}),
-				toPhabUri({
-					revisionId: model.id,
-					revisionPHID: model.phid,
-					diffPHID: model.revision.fields.diffPHID,
-					fileName: changeset.currentPath || changeset.oldPath || '',
-					side: 'after',
-					status,
-				}),
-				`${model.monogram} — ${changeset.currentPath || changeset.oldPath}`,
+					title: `${model.monogram} — ${changeset.currentPath || changeset.oldPath}`,
+				} satisfies OpenWorktreeOrPhabDiffArgs,
 			],
 		};
 	}
