@@ -332,6 +332,14 @@ body {
 	border-top: 1px solid var(--vscode-panel-border);
 	display: flex; flex-direction: column; gap: 8px;
 }
+.inline-reply-error {
+	display: flex; align-items: center; gap: 6px;
+	padding: 6px 8px;
+	border-radius: 4px;
+	background: color-mix(in srgb, var(--vscode-errorForeground) 12%, transparent);
+	color: var(--vscode-errorForeground);
+	font-size: 0.9em;
+}
 .inline-reply-actions {
 	display: flex; gap: 8px;
 }

@@ -413,9 +413,11 @@ interface ReplyComposerProps {
 function ReplyComposer({ replyToCommentPHID, diffPHID, path, line, length, isNewFile, onClose }: ReplyComposerProps) {
 	const [text, setText] = useState('');
 	const [busy, setBusy] = useState(false);
+	const [error, setError] = useState<string | null>(null);
 	const submit = async () => {
 		if (text.trim().length === 0 || busy) return;
 		setBusy(true);
+		setError(null);
 		try {
 			const ok = await request<boolean>('submitInlineReply', {
 				replyToCommentPHID,
@@ -429,7 +431,11 @@ function ReplyComposer({ replyToCommentPHID, diffPHID, path, line, length, isNew
 			if (ok) {
 				setText('');
 				onClose();
+			} else {
+				setError('Reply could not be posted here.');
 			}
+		} catch (err) {
+			setError(err instanceof Error ? err.message : String(err));
 		} finally {
 			setBusy(false);
 		}
@@ -439,6 +445,12 @@ function ReplyComposer({ replyToCommentPHID, diffPHID, path, line, length, isNew
 			<Suspense fallback={<div className="composer-loading">Loading editor…</div>}>
 				<RemarkupComposer onChange={setText} disabled={busy} />
 			</Suspense>
+			{error && (
+				<div className="inline-reply-error" role="alert">
+					<i className="codicon codicon-error" />
+					<span>{error}</span>
+				</div>
+			)}
 			<div className="inline-reply-actions">
 				<button
 					type="button"
@@ -491,12 +503,10 @@ function renderInlineAnnotation(annotation: DiffLineAnnotation) {
 			</div>
 			<Remarkup html={c.contentHtml} source={c.content} />
 			<div className="pierre-annotation-actions">
-				{!c.isOutdated && (
-					<button type="button" className="annotation-action" onClick={onReply}>
-						<i className="codicon codicon-reply" />
-						<span>Reply</span>
-					</button>
-				)}
+				<button type="button" className="annotation-action" onClick={onReply}>
+					<i className="codicon codicon-reply" />
+					<span>Reply</span>
+				</button>
 				{txId && (
 					<button type="button" className="annotation-action" onClick={onShowInActivity}>
 						<i className="codicon codicon-history" />
@@ -1158,7 +1168,7 @@ export function App() {
 									const isComment = isCommentLikeTx(tx);
 									const inline = tx.inline;
 									const headComment = tx.comments.find((c) => c.phid);
-									const canReplyHere = !!(inline && !inline.isOutdated && headComment && payload.activeDiffPHID);
+									const canReplyHere = !!(inline && inline.diffPHID && headComment);
 									const isReplying = activeReplyTxId === tx.id;
 									return (
 										<li
@@ -1198,7 +1208,7 @@ export function App() {
 											{canReplyHere && isReplying && headComment && inline && (
 												<ReplyComposer
 													replyToCommentPHID={headComment.phid}
-													diffPHID={payload.activeDiffPHID!}
+													diffPHID={inline.diffPHID}
 													path={inline.path}
 													line={inline.line}
 													length={inline.length}
