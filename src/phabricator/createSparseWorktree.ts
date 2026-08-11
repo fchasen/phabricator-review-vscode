@@ -1,4 +1,8 @@
 import { execFile } from 'child_process';
+import * as fs from 'fs';
+import * as path from 'path';
+import Logger, { WORKTREE } from '../common/logger';
+import { mozconfigCandidatePaths } from './sparsePresets';
 
 export interface CreateSparseWorktreeOptions {
 	sourceRepo: string;
@@ -67,6 +71,29 @@ export async function createSparseWorktree(opts: CreateSparseWorktreeOptions): P
 	} catch (err) {
 		await removeWorktree(opts.sourceRepo, opts.worktreePath);
 		throw err;
+	}
+
+	copyMozconfig(opts.sourceRepo, opts.worktreePath);
+}
+
+export function copyMozconfig(sourceRepo: string, worktreePath: string): void {
+	const target = path.join(worktreePath, 'mozconfig');
+	if (fs.existsSync(target)) {
+		return;
+	}
+	for (const source of mozconfigCandidatePaths(sourceRepo, process.env)) {
+		try {
+			if (!fs.statSync(source).isFile()) {
+				continue;
+			}
+			fs.copyFileSync(source, target);
+			Logger.info(`Copied ${source} → ${target}`, WORKTREE);
+			return;
+		} catch (err) {
+			if ((err as NodeJS.ErrnoException)?.code !== 'ENOENT') {
+				Logger.warn(`Could not copy ${source} → ${target}: ${String(err)}`, WORKTREE);
+			}
+		}
 	}
 }
 
