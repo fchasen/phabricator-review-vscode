@@ -182,6 +182,40 @@ async function resolveRevisionId(revisionArg?: number | string): Promise<number 
 }
 
 export async function resolveFirefoxSource(ctx: CheckoutContext): Promise<string> {
+	return mainCheckoutOf(await firefoxSourceCandidate(ctx));
+}
+
+const mainCheckouts = new Map<string, string>();
+
+async function mainCheckoutOf(repoPath: string): Promise<string> {
+	const cached = mainCheckouts.get(repoPath);
+	if (cached) {
+		return cached;
+	}
+	try {
+		const main = await queryMainCheckout(repoPath);
+		if (main) {
+			mainCheckouts.set(repoPath, main);
+			return main;
+		}
+	} catch (err) {
+		Logger.warn(`Could not resolve main checkout for ${repoPath}: ${detailOf(err)}`, WORKTREE);
+	}
+	return repoPath;
+}
+
+async function queryMainCheckout(repoPath: string): Promise<string | undefined> {
+	const { stdout } = await runGit(['-C', repoPath, 'worktree', 'list', '--porcelain']);
+	const record = stdout.split(/\r?\n\r?\n/, 1)[0].split(/\r?\n/);
+	if (record.includes('bare')) {
+		return undefined;
+	}
+	const entry = record.find((line) => line.startsWith('worktree '));
+	const main = entry?.slice('worktree '.length).trim();
+	return main && isDirectory(main) ? main : undefined;
+}
+
+async function firefoxSourceCandidate(ctx: CheckoutContext): Promise<string> {
 	const active = await ctx.resolveActiveRepoRoot();
 	if (active && isDirectory(active.fsPath)) {
 		return active.fsPath;
@@ -210,7 +244,7 @@ export async function resolveFirefoxSource(ctx: CheckoutContext): Promise<string
 }
 
 function resolveStorageRoot(config: vscode.WorkspaceConfiguration): string {
-	const configured = config.get<string>('worktreeStorageRoot', '~/.worktrees').trim();
+	const configured = config.get<string>('worktreeStorageRoot', '').trim();
 	if (configured) {
 		return expandHome(configured);
 	}

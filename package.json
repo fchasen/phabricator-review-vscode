@@ -200,8 +200,8 @@
 				},
 				"phabricator.worktreeStorageRoot": {
 					"type": "string",
-					"default": "~/.worktrees",
-					"description": "Root directory under which sparse worktrees are created, laid out as <root>/<repoName>/patch-D<id>. Overridden by $WORKTREE_STORAGE_ROOT."
+					"default": "",
+					"description": "Root directory under which sparse worktrees are created, laid out as <root>/<repoName>/patch-D<id>. When empty, $WORKTREE_STORAGE_ROOT, then ~/.worktrees are used."
 				},
 				"phabricator.worktreeSparsePreset": {
 					"type": "string",
