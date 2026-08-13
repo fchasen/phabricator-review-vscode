@@ -243,7 +243,7 @@ async function firefoxSourceCandidate(ctx: CheckoutContext): Promise<string> {
 	);
 }
 
-function resolveStorageRoot(config: vscode.WorkspaceConfiguration): string {
+function resolveStorageRoot(config: vscode.WorkspaceConfiguration, sourceRepo: string): string {
 	const configured = config.get<string>('worktreeStorageRoot', '').trim();
 	if (configured) {
 		return expandHome(configured);
@@ -252,7 +252,7 @@ function resolveStorageRoot(config: vscode.WorkspaceConfiguration): string {
 	if (fromEnv) {
 		return expandHome(fromEnv);
 	}
-	return path.join(os.homedir(), '.worktrees');
+	return path.join(sourceRepo, '.worktrees');
 }
 
 export function worktreeStoragePath(root: string, repoName: string, revisionId: number): string {
@@ -279,7 +279,7 @@ function worktreeLocationFor(
 	revisionId: number,
 ): Omit<WorktreeLocation, 'sourceRepo'> {
 	const config = vscode.workspace.getConfiguration('phabricator');
-	const storageRoot = resolveStorageRoot(config);
+	const storageRoot = resolveStorageRoot(config, sourceRepo);
 	const repoName = path.basename(sourceRepo);
 	return {
 		worktreePath: worktreeStoragePath(storageRoot, repoName, revisionId),
