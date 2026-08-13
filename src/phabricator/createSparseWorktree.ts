@@ -24,6 +24,8 @@ export interface RunGitError extends Error {
 
 const MAX_BUFFER = 64 * 1024 * 1024;
 
+const MATERIALIZING_PATTERN = '/.vscode-phab-materializing';
+
 export function runGit(args: string[], opts: { cwd?: string; stdin?: string } = {}): Promise<RunGitResult> {
 	return new Promise((resolve, reject) => {
 		const child = execFile(
@@ -61,11 +63,15 @@ export async function createSparseWorktree(opts: CreateSparseWorktreeOptions): P
 	await runGit(addArgs);
 
 	try {
+		await stageSkippedIndex(opts.worktreePath);
 		const patterns = opts.sparsePatterns;
 		if (patterns && patterns.length > 0) {
-			await runGit(['-C', opts.worktreePath, 'sparse-checkout', 'set', '--no-cone', '--stdin'], {
-				stdin: patterns.join('\n') + '\n',
-			});
+			await runGit(
+				['-C', opts.worktreePath, '-c', 'checkout.workers=0', 'sparse-checkout', 'set', '--no-cone', '--stdin'],
+				{ stdin: patterns.join('\n') + '\n' },
+			);
+		} else {
+			await runGit(['-C', opts.worktreePath, '-c', 'checkout.workers=0', 'sparse-checkout', 'disable']);
 		}
 		await runGit(['-C', opts.worktreePath, '-c', 'checkout.workers=0', 'reset', '--hard', 'HEAD']);
 	} catch (err) {
@@ -74,6 +80,13 @@ export async function createSparseWorktree(opts: CreateSparseWorktreeOptions): P
 	}
 
 	copyMozconfig(opts.sourceRepo, opts.worktreePath);
+}
+
+async function stageSkippedIndex(worktreePath: string): Promise<void> {
+	await runGit(['-C', worktreePath, 'read-tree', 'HEAD']);
+	await runGit(['-C', worktreePath, 'sparse-checkout', 'set', '--no-cone', '--stdin'], {
+		stdin: MATERIALIZING_PATTERN + '\n',
+	});
 }
 
 export function copyMozconfig(sourceRepo: string, worktreePath: string): void {
